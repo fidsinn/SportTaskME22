@@ -7,4 +7,4 @@ dependencies:
   - opencv
   - scikit-learn
   - matplotlib
-prefix: /home/pemartin/.conda/envs/torch_env
+prefix: /home/sc.uni-leipzig.de/fj109ndyu/.conda/envs/fb

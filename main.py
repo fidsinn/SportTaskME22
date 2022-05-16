@@ -3,7 +3,6 @@ __author__ = "Pierre-Etienne Martin"
 __copyright__ = "Copyright (C) 2022 Pierre-Etienne Martin"
 __license__ = "CC BY 4.0"
 __version__ = "1.0"
-import cv2
 import datetime
 import os
 import platform
@@ -17,6 +16,7 @@ from torch.autograd import Variable
 from torch.utils.data import Dataset, DataLoader
 from utils import *
 from model import *
+import cv2
 print('Python version : ', platform.python_version())
 print('OpenCV version  : ', cv2.__version__)
 print('Torch version : ', torch.__version__)
@@ -28,7 +28,7 @@ print('Nb of threads for OpenCV : ', cv2.getNumThreads())
 Model variables
 '''
 class my_variables():
-    def __init__(self, working_path, task_name, size_data=[320,180,96], model_load=None, cuda=True, batch_size=10, workers=10, epochs=500, lr=0.01, nesterov=True, weight_decay=0.005, momentum=0.5):
+    def __init__(self, working_path, task_name, size_data=[320,180,96], model_load=None, cuda=True, batch_size=3, workers=10, epochs=500, lr=0.01, nesterov=True, weight_decay=0.005, momentum=0.5):
         self.size_data = np.array(size_data)
         self.cuda = cuda
         self.workers = workers
@@ -735,6 +735,12 @@ def detection_task(working_folder, source_folder, log=None):
 if __name__ == "__main__":
     # Chrono
     start_time = time.time()
+
+    #torch gpu check
+    print('torch.cuda.is_available:',torch.cuda.is_available())
+    print('torch.cuda.device_count:',torch.cuda.device_count())
+    #print('torch.cuda.current_device:',torch.cuda.current_device())
+    #print('torch.cuda.get_device_name:',torch.cuda.get_device_name(0))
 
     # MediaEval Task source folder
     source_folder = 'data'

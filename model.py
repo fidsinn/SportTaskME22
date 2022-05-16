@@ -173,7 +173,7 @@ class AttentionModule3D(nn.Module):
 3D Attention Model  
 '''
 class CCNAttentionNet(nn.Module):
-    def __init__(self, size_data, n_classes, in_dim=3, filters=[32,64,128,256,512], cuda=True):
+    def __init__(self, size_data, n_classes, in_dim=3, filters=[8,8,8,8,8], cuda=True):
         super(CCNAttentionNet, self).__init__()
         # Per default parameters
         # pool_size = (2,2,2)

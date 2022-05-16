@@ -162,4 +162,4 @@ dependencies:
   - xz=5.2.5=h7b6447c_0
   - zlib=1.2.12=h7f8727e_2
   - zstd=1.4.9=haebb681_0
-prefix: /home/pemartin/.conda/envs/torch_env
+prefix: /home/sc.uni-leipzig.de/fj109ndyu/.conda/envs/fb
