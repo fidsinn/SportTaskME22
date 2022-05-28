@@ -9,9 +9,9 @@
 
 module load PyTorch/1.9.0-fosscuda-2020b
 #module load PyTorch/1.10.0-foss-2021a-CUDA-11.3.1
-module load scikit-learn
+#module load scikit-learn
 #pip install matplotlib
 #module load matplotlib
-module load OpenCV
+#module load OpenCV
 
 srun python main.py

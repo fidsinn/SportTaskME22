@@ -86,7 +86,7 @@ class My_dataset_temporal(Dataset):
         begin = self.my_stroke.begin + idx
         rgb = get_data(self.my_stroke.video_path, begin, begin+self.size_data[2], self.size_data, self.augmentation)
         sample = {'rgb': torch.FloatTensor(rgb), 'label': self.my_stroke.move, 'my_stroke': {'video_path': self.my_stroke.video_path, 'begin': begin, 'end': begin + self.size_data[2]}}
-        return sample
+        return sample #where is label from
 
     def my_print(self, show_option=1):
         self.annotation.my_print()
@@ -183,8 +183,7 @@ def get_data(data_path, begin, end, size_data, augmentation):
         except:
             raise ValueError('Problem with %s begin %d size %s' % (os.path.join(data_path, '%08d.png' % frame_number), begin, str(size_data)))
         rgb_data.append(cv2.split(rgb))
-    # To match size_data variable, transposition is needed. From (T,C,H,W) to (C,W,H,T).
-    rgb_data = np.transpose(rgb_data, (1, 3, 2, 0))
+    rgb_data = np.transpose(rgb_data, (1, 3, 2, 0)) # To match size_data variable, transposition is needed. From (T,C,H,W) to (C,W,H,T).
     return rgb_data
 
 '''
@@ -540,7 +539,6 @@ def test_videos_segmentation(model, args, test_list, list_of_strokes=None):
         save_xml_data(xml_files_mean, path_xml_save_mean)
         save_xml_data(xml_files_gaussian, path_xml_save_gaussian)
     return 1
-
 
 '''
 Set up the environment and extract data
