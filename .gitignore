@@ -1,4 +1,10 @@
 data/
+data_lite/
+tmp/
 private/
 working_folder/
-
+mmaction/demo/tmp/
+mmaction/input_vid/
+mmaction/output_vid/
+mmaction/tmp/
+mmaction/test_file_finn.py
