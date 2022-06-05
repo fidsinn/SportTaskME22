@@ -172,15 +172,19 @@ def main():
     videos_process_counter = 0
     if not (design == 's' or design == 'srgb'):
         sys.exit('\"Error: Enter design of s or srgb\"')
+
+    print('Working GPU device:',torch.cuda.get_device_name(torch.cuda.current_device()))
+
     for subdir, dirs, files in os.walk(args.dir):
-        for file in files:
-            if file.lower().endswith('.mp4'):
-                videos.append(os.path.join(subdir,file))
+        for vid_file in files:
+            if vid_file.lower().endswith('.mp4'):
+                videos.append(os.path.join(subdir,vid_file))
+                
     for subdir, dirs, files in os.walk(args.dir):
         for vid_file in files:
     #for vid_in in videos:
         #vid_in_path = args.dir + '/' + vid_in
-            if file.lower().endswith('.mp4'):
+            if vid_file.lower().endswith('.mp4'):
                 vid_in_path = os.path.join(subdir,vid_file)
                 print('Processing: ' + vid_in_path)
                 
@@ -233,12 +237,12 @@ def main():
                     print('vis_frames type:',type(vis_frames))
                 vid = mpy.ImageSequenceClip([x[:, :, ::-1] for x in vis_frames], fps=100)
                 #vid.write_videofile(args.out_dir + '/{}_'.format(design) + vid_in, remove_temp=True)
-                #vid.write_videofile('{}/{}_{}'.format(subdir, design, file), remove_temp=True)
-                vid.write_videofile(os.path.join(subdir,'{}_'.format(design)+file), remove_temp=True)
+                #vid.write_videofile('{}/{}_{}'.format(subdir, design, vid_file), remove_temp=True)
+                vid.write_videofile(os.path.join(subdir,'{}_'.format(design)+vid_file), remove_temp=True)
 
                 tmp_frame_dir = osp.dirname(frame_paths[0])
                 shutil.rmtree(tmp_frame_dir)
-                print('Processed file {}'.format(os.path.join(subdir,'{}'.format(design)+file)))
+                print('Processed vid_file {}'.format(os.path.join(subdir,'{}'.format(design)+vid_file)))
                 videos_process_counter += 1
                 print('Processed {}/{} videos ({}%)'.format(videos_process_counter, len(videos), round((videos_process_counter/len(videos)),2)*100))
                 print('Actual processing time: {}min'.format(round(((time.time()-start_time)/60),2)))
