@@ -179,12 +179,12 @@ def main():
         for vid_file in files:
             if vid_file.lower().endswith('.mp4'):
                 videos.append(os.path.join(subdir,vid_file))
-                
+
     for subdir, dirs, files in os.walk(args.dir):
         for vid_file in files:
     #for vid_in in videos:
         #vid_in_path = args.dir + '/' + vid_in
-            if vid_file.lower().endswith('.mp4'):
+            if vid_file.lower().endswith('.mp4') and vid_file[0].isdigit():
                 vid_in_path = os.path.join(subdir,vid_file)
                 print('Processing: ' + vid_in_path)
                 
@@ -229,7 +229,7 @@ def main():
                     vis_frames = [
                         vis_pose_result(pose_model, 
                                         frame_paths[i],
-                                        [{'bbox': [-1,-1,-1,-1,0],'keypoints': pose_results[i][0]['keypoints']}],
+                                        pose_results[i], #[{'bbox': [-1,-1,-1,-1,0],'keypoints': pose_results[i][0]['keypoints']}],
                                         radius = 7,
                                         thickness=5)
                         for i in range(num_frame)
