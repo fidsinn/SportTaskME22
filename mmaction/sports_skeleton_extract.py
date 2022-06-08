@@ -173,18 +173,29 @@ def main():
     if not (design == 's' or design == 'srgb'):
         sys.exit('\"Error: Enter design of s or srgb\"')
 
-    print('Working GPU device:',torch.cuda.get_device_name(torch.cuda.current_device()))
+    if torch.cuda.is_available():
+        print('Working GPU device:',torch.cuda.get_device_name(torch.cuda.current_device()))
+    else:
+        print('Working GPU devices NOT available')
+
+    exclude_set = 'test'
 
     for subdir, dirs, files in os.walk(args.dir):
         for vid_file in files:
-            if vid_file.lower().endswith('.mp4'):
+            if vid_file.lower().endswith('.mp4')
+            and vid_file[0].isdigit()
+            and ('s_' + vid_file[0]).exists()
+            and exclude_set not in subdir:
                 videos.append(os.path.join(subdir,vid_file))
 
     for subdir, dirs, files in os.walk(args.dir):
         for vid_file in files:
     #for vid_in in videos:
         #vid_in_path = args.dir + '/' + vid_in
-            if vid_file.lower().endswith('.mp4') and vid_file[0].isdigit():
+            if vid_file.lower().endswith('.mp4')
+            and vid_file[0].isdigit()
+            and not ('s_' + vid_file[0]).exists()
+            and exclude_set not in subdir:
                 vid_in_path = os.path.join(subdir,vid_file)
                 print('Processing: ' + vid_in_path)
                 
@@ -219,9 +230,10 @@ def main():
                     vis_frames = [
                         vis_pose_result(pose_model, 
                                         np.zeros(shape=[h, w, 3]),
-                                        [{'bbox': [-1,-1,-1,-1,0],'keypoints': pose_results[i][0]['keypoints']}],
+                                        pose_results[i], #[{'bbox': [-1,-1,-1,-1,0],'keypoints': pose_results[i][0]['keypoints']}],
                                         radius = 7,
-                                        thickness=5) #subtracts the box
+                                        thickness=5,
+                                        bbox_color='black') #subtracts the box
                         for i in range(num_frame)
                     ]
                     print('vis_frames type:',type(vis_frames))
@@ -231,11 +243,12 @@ def main():
                                         frame_paths[i],
                                         pose_results[i], #[{'bbox': [-1,-1,-1,-1,0],'keypoints': pose_results[i][0]['keypoints']}],
                                         radius = 7,
-                                        thickness=5)
+                                        thickness=5,
+                                        bbox_color='black')
                         for i in range(num_frame)
                     ]
                     print('vis_frames type:',type(vis_frames))
-                vid = mpy.ImageSequenceClip([x[:, :, ::-1] for x in vis_frames], fps=100)
+                vid = mpy.ImageSequenceClip([x[:, :, ::-1] for x in vis_frames], fps=120)
                 #vid.write_videofile(args.out_dir + '/{}_'.format(design) + vid_in, remove_temp=True)
                 #vid.write_videofile('{}/{}_{}'.format(subdir, design, vid_file), remove_temp=True)
                 vid.write_videofile(os.path.join(subdir,'{}_'.format(design)+vid_file), remove_temp=True)
