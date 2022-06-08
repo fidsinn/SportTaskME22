@@ -63,6 +63,19 @@ def os_join_test(rootdir):
             if file.lower().endswith('.mp4'):
                 print(os.path.join(subdir,'{}'.format('s_')+file))
 
+def weird_for_loop():
+    test_list_two = [1, 2, 3]
+    test_list = ['a','b','c']
+    test_list_three = [
+        test_list_two.append(i)
+        for i in range(test_list_two)
+    ]
+    
+def concatting():
+    string1 = '1234.mp4'
+    string2 = 's_' + string1
+    return string2
+
 #arguments_work()
 #parse_args_running()
 #prefix_work('s')
@@ -70,4 +83,6 @@ def os_join_test(rootdir):
 #iter_dir('../data_lite')
 #print_root('../data')
 #processing_time(15)
-os_join_test('../data_lite')
+#os_join_test('data_lite')
+#weird_for_loop()
+print(concatting())

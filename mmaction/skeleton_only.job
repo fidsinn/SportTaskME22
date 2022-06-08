@@ -1,0 +1,9 @@
+#!/bin/bash
+#SBATCH --nodes=1
+#SBATCH --ntasks-per-node=4
+#SBATCH --job-name=skel_only
+#SBATCH --partition=clara-job
+#SBATCH --mem-per-cpu=48G
+#SBATCH --gres=gpu:v100:1
+
+srun python sports_skeleton_extract.py s ../data

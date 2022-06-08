@@ -7,4 +7,5 @@ mmaction/demo/tmp/
 mmaction/input_vid/
 mmaction/output_vid/
 mmaction/tmp/
+mmaction/slurm*.out
 mmaction/test_file_finn.py
