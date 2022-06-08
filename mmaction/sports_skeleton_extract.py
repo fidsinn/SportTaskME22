@@ -182,20 +182,14 @@ def main():
 
     for subdir, dirs, files in os.walk(args.dir):
         for vid_file in files:
-            if vid_file.lower().endswith('.mp4')
-            and vid_file[0].isdigit()
-            and ('s_' + vid_file[0]).exists()
-            and exclude_set not in subdir:
+            if vid_file.lower().endswith('.mp4') and vid_file[0].isdigit() and not os.path.exists(subdir + '/' + 's_' + vid_file) and exclude_set not in subdir:
                 videos.append(os.path.join(subdir,vid_file))
 
     for subdir, dirs, files in os.walk(args.dir):
         for vid_file in files:
     #for vid_in in videos:
         #vid_in_path = args.dir + '/' + vid_in
-            if vid_file.lower().endswith('.mp4')
-            and vid_file[0].isdigit()
-            and not ('s_' + vid_file[0]).exists()
-            and exclude_set not in subdir:
+            if vid_file.lower().endswith('.mp4') and vid_file[0].isdigit() and not os.path.exists(subdir + '/' + 's_' + vid_file) and exclude_set not in subdir:
                 vid_in_path = os.path.join(subdir,vid_file)
                 print('Processing: ' + vid_in_path)
                 
