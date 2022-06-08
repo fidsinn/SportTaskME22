@@ -587,7 +587,7 @@ def make_work_tree(working_folder, source_folder, frame_width=320, log=None):
     # Chrono
     start_time = time.time()
     # Get all the videos and extract the frames in the working_folder directory.
-    list_of_videos = [f for f in getListOfFiles(os.path.join(source_folder)) if f.endswith('.mp4')]
+    list_of_videos = [f for f in getListOfFiles(os.path.join(source_folder)) if f.endswith('.mp4') and f.startswith('s_')]
     for idx, video_path in enumerate(list_of_videos):
         progress_bar(idx, len(list_of_videos), 'Frame extraction of %s' % (video_path))
         frames_path = os.path.join(working_folder, '/'.join(os.path.splitext(video_path)[0].split('/')[1:]))

@@ -219,9 +219,10 @@ def main():
                     vis_frames = [
                         vis_pose_result(pose_model, 
                                         np.zeros(shape=[h, w, 3]),
-                                        [{'bbox': [-1,-1,-1,-1,0],'keypoints': pose_results[i][0]['keypoints']}],
+                                        pose_results[i], # [{'bbox': [-1,-1,-1,-1,0],'keypoints': pose_results[i][0]['keypoints']}],
                                         radius = 7,
-                                        thickness=5) #subtracts the box
+                                        thickness=5,
+                                        bbox_color='black')
                         for i in range(num_frame)
                     ]
                     print('vis_frames type:',type(vis_frames))
