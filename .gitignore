@@ -3,9 +3,11 @@ data_lite/
 tmp/
 private/
 working_folder/
+working_folder_s/
 mmaction/demo/tmp/
 mmaction/input_vid/
 mmaction/output_vid/
 mmaction/tmp/
 mmaction/slurm*.out
 mmaction/test_file_finn.py
+__pycache__

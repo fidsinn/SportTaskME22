@@ -587,14 +587,15 @@ def make_work_tree(working_folder, source_folder, frame_width=320, log=None):
     # Chrono
     start_time = time.time()
     # Get all the videos and extract the frames in the working_folder directory.
-    list_of_videos = [f for f in getListOfFiles(os.path.join(source_folder)) if f.endswith('.mp4') and f.startswith('s_')]
+    list_of_videos = [f for f in getListOfFiles(os.path.join(source_folder)) if 's_' in f or 'test' in f and f.endswith('.mp4') and '.' not in f]
     for idx, video_path in enumerate(list_of_videos):
         progress_bar(idx, len(list_of_videos), 'Frame extraction of %s' % (video_path))
         frames_path = os.path.join(working_folder, '/'.join(os.path.splitext(video_path)[0].split('/')[1:]))
+        frames_path = frames_path.replace('s_','')
         if not os.path.exists(frames_path):
             os.makedirs(frames_path)
             frame_extractor(video_path, frame_width, frames_path)
-    progress_bar(idx+1, len(list_of_videos), 'Frame extraction done in %ds' % (time.time()-start_time), 1, log=log)
+        progress_bar(idx+1, len(list_of_videos), 'Frame extraction done in %ds' % (time.time()-start_time), 1, log=log)
     return 1
 
 '''
@@ -784,7 +785,7 @@ if __name__ == "__main__":
     # working_folder_rgb    -> rgb stream
     # working_folder_srgb   -> rgb + skeleton stream
 
-    working_folder = 'working_folder'
+    working_folder = 'working_folder_s'
     
     # Log file
     log_folder = os.path.join(working_folder, 'logs')
@@ -795,7 +796,7 @@ if __name__ == "__main__":
     make_work_tree(working_folder, source_folder, frame_width=320, log=log)
 
     # Tasks
-    detection_task(working_folder, source_folder, log=log)
+    # detection_task(working_folder, source_folder, log=log)
     classification_task(working_folder, log=log, test_strokes_segmentation=get_videos_list(os.path.join(working_folder, 'detectionTask', 'test')))
     
     print_and_log('All Done in %ds' % (time.time()-start_time), log=log)
