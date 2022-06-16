@@ -1,7 +1,0 @@
-#!/bin/bash
-#SBATCH --nodes=8
-#SBATCH --ntasks-per-node=16
-#SBATCH --job-name=skel_rgb
-#SBATCH --partition=clara-job
-
-srun python sports_skeleton_extract.py srgb ../data
