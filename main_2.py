@@ -16,7 +16,7 @@ if __name__ == "__main__":
     # Mode s, srgb, rgb TODO: This will be kicked eventualy
 
     # MediaEval Task source folder
-    source_folder = 'data/detectionTask/validation'
+    source_folder = 'data'
 
     # Folder to save work
     # s      -> skeleton stream
