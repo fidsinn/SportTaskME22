@@ -63,7 +63,7 @@ class my_variables():
 '''
 My_dataset class which uses My_stroke class to be used in the data loader
 '''
-clas(Dataset):
+class My_dataset(Dataset):
     def __init__(self, dataset_list, size_data, augmentation=False):
         self.dataset_list = dataset_list
         self.size_data = size_data
@@ -780,6 +780,10 @@ if __name__ == "__main__":
     source_folder = 'data'
 
     # Folder to save work
+    # working_folder_s      -> skeleton stream
+    # working_folder_rgb    -> rgb stream
+    # working_folder_srgb   -> rgb + skeleton stream
+
     working_folder = 'working_folder'
     
     # Log file

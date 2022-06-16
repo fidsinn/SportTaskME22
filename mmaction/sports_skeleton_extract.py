@@ -18,6 +18,7 @@ import moviepy.editor as mpy
 
 import sys
 
+
 def parse_args():
     parser = argparse.ArgumentParser(description='Skeleton extraction')
     parser.add_argument('design', help='design (either s or srgb)')
@@ -224,10 +225,10 @@ def main():
                     vis_frames = [
                         vis_pose_result(pose_model, 
                                         np.zeros(shape=[h, w, 3]),
-                                        pose_results[i], # [{'bbox': [-1,-1,-1,-1,0],'keypoints': pose_results[i][0]['keypoints']}],
+                                        [{'no_box': [],'keypoints': pose_results[i][0]['keypoints']}],
                                         radius = 7,
                                         thickness=5,
-                                        bbox_color='black')
+                                        bbox_color='green')
                         for i in range(num_frame)
                     ]
                     print('vis_frames type:',type(vis_frames))
@@ -235,7 +236,7 @@ def main():
                     vis_frames = [
                         vis_pose_result(pose_model, 
                                         frame_paths[i],
-                                        pose_results[i], #[{'bbox': [-1,-1,-1,-1,0],'keypoints': pose_results[i][0]['keypoints']}],
+                                        [{'no_box': [],'keypoints': pose_results[i][0]['keypoints']}],
                                         radius = 7,
                                         thickness=5,
                                         bbox_color='black')
