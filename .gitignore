@@ -1,4 +1,8 @@
 data/
+data_lite/
 private/
 working_folder/
-
+working_folder_s/
+__pycache__/
+mmpose_utils/tmp/
+tmp/
