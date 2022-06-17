@@ -3,6 +3,7 @@ import argparse
 import os
 import os.path as osp
 import shutil
+import time
 
 import cv2
 import mmcv
@@ -17,11 +18,12 @@ import moviepy.editor as mpy
 
 import sys
 
+
 def parse_args():
     parser = argparse.ArgumentParser(description='Skeleton extraction')
     parser.add_argument('design', help='design (either s or srgb)')
     parser.add_argument('dir', help='input directory')
-    parser.add_argument('out_dir', help='output filename')
+    #parser.add_argument('out_dir', help='output filename')
     parser.add_argument(
         '--config',
         default=('configs/skeleton/posec3d/'
@@ -157,6 +159,7 @@ def pose_inference(args, frame_paths, det_results):
 
 
 def main():
+    start_time = time.time()
     args = parse_args()
 
     # design = os.listdir(args.design)
@@ -165,65 +168,93 @@ def main():
     # elif design = 'srgb':
     #     stream_prefix = 'srgb_'
     design = args.design
-    videos = os.listdir(args.dir)
+    #videos = os.listdir(args.dir)
+    videos = []
+    videos_process_counter = 0
     if not (design == 's' or design == 'srgb'):
         sys.exit('\"Error: Enter design of s or srgb\"')
-    for vid_in in videos:
-        vid_in_path = args.dir + '/' + vid_in
-        print('Proccesing: ' + vid_in_path)
-        
-        frame_paths, original_frames = frame_extraction(vid_in_path,
-                                                        args.short_side)
-        num_frame = len(frame_paths)
-        h, w, _ = original_frames[0].shape
 
-        # Get clip_len, frame_interval and calculate center index of each clip
-        config = mmcv.Config.fromfile(args.config)
-        config.merge_from_dict(args.cfg_options)
-        for component in config.data.test.pipeline:
-            if component['type'] == 'PoseNormalize':
-                component['mean'] = (w // 2, h // 2, .5)
-                component['max_value'] = (w, h, 1.)
+    if torch.cuda.is_available():
+        print('Working GPU device:',torch.cuda.get_device_name(torch.cuda.current_device()))
+    else:
+        print('Working GPU devices NOT available')
 
-        # Load label_map
-        label_map = [x.strip() for x in open(args.label_map).readlines()]
+    exclude_set = 'test'
 
-        # Get Human detection results
-        det_results = detection_inference(args, frame_paths)
-        torch.cuda.empty_cache()
-      
-        pose_results = pose_inference(args, frame_paths, det_results)
-        torch.cuda.empty_cache()
+    for subdir, dirs, files in os.walk(args.dir):
+        for vid_file in files:
+            if vid_file.lower().endswith('.mp4') and vid_file[0].isdigit() and not os.path.exists(subdir + '/' + 's_' + vid_file) and exclude_set not in subdir:
+                videos.append(os.path.join(subdir,vid_file))
 
-        pose_model = init_pose_model(args.pose_config, 
-                                    args.pose_checkpoint,
-                                    args.device)
-        
-        if design == 's':
-            vis_frames = [
-                vis_pose_result(pose_model, 
-                                np.zeros(shape=[h, w, 3]),
-                                [{'bbox': [-1,-1,-1,-1,0],'keypoints': pose_results[i][0]['keypoints']}],
-                                radius = 7,
-                                thickness=5) #subtracts the box
-                for i in range(num_frame)
-            ]
-            print('vis_frames type:',type(vis_frames))
-        elif design == 'srgb':
-            vis_frames = [
-                vis_pose_result(pose_model, 
-                                frame_paths[i],
-                                [{'bbox': [-1,-1,-1,-1,0],'keypoints': pose_results[i][0]['keypoints']}],
-                                radius = 7,
-                                thickness=5)
-                for i in range(num_frame)
-            ]
-            print('vis_frames type:',type(vis_frames))
-        vid = mpy.ImageSequenceClip([x[:, :, ::-1] for x in vis_frames], fps=100)
-        vid.write_videofile(args.out_dir + '/{}_'.format(design) + vid_in, remove_temp=True)
+    for subdir, dirs, files in os.walk(args.dir):
+        for vid_file in files:
+    #for vid_in in videos:
+        #vid_in_path = args.dir + '/' + vid_in
+            if vid_file.lower().endswith('.mp4') and vid_file[0].isdigit() and not os.path.exists(subdir + '/' + 's_' + vid_file) and exclude_set not in subdir:
+                vid_in_path = os.path.join(subdir,vid_file)
+                print('Processing: ' + vid_in_path)
+                
+                frame_paths, original_frames = frame_extraction(vid_in_path,
+                                                                args.short_side)
+                num_frame = len(frame_paths)
+                h, w, _ = original_frames[0].shape
 
-        tmp_frame_dir = osp.dirname(frame_paths[0])
-        shutil.rmtree(tmp_frame_dir)
+                # Get clip_len, frame_interval and calculate center index of each clip
+                config = mmcv.Config.fromfile(args.config)
+                config.merge_from_dict(args.cfg_options)
+                for component in config.data.test.pipeline:
+                    if component['type'] == 'PoseNormalize':
+                        component['mean'] = (w // 2, h // 2, .5)
+                        component['max_value'] = (w, h, 1.)
+                
+                
+                # Load label_map
+                label_map = [x.strip() for x in open(args.label_map).readlines()]
+
+                # Get Human detection results
+                det_results = detection_inference(args, frame_paths)
+                torch.cuda.empty_cache()
+            
+                pose_results = pose_inference(args, frame_paths, det_results)
+                torch.cuda.empty_cache()
+
+                pose_model = init_pose_model(args.pose_config, 
+                                            args.pose_checkpoint,
+                                            args.device)
+                
+                if design == 's':
+                    vis_frames = [
+                        vis_pose_result(pose_model, 
+                                        np.zeros(shape=[h, w, 3]),
+                                        [{'no_box': [],'keypoints': pose_results[i][0]['keypoints']}],
+                                        radius = 7,
+                                        thickness=5,
+                                        bbox_color='green')
+                        for i in range(num_frame)
+                    ]
+                    print('vis_frames type:',type(vis_frames))
+                elif design == 'srgb':
+                    vis_frames = [
+                        vis_pose_result(pose_model, 
+                                        frame_paths[i],
+                                        [{'no_box': [],'keypoints': pose_results[i][0]['keypoints']}],
+                                        radius = 7,
+                                        thickness=5,
+                                        bbox_color='black')
+                        for i in range(num_frame)
+                    ]
+                    print('vis_frames type:',type(vis_frames))
+                vid = mpy.ImageSequenceClip([x[:, :, ::-1] for x in vis_frames], fps=120)
+                #vid.write_videofile(args.out_dir + '/{}_'.format(design) + vid_in, remove_temp=True)
+                #vid.write_videofile('{}/{}_{}'.format(subdir, design, vid_file), remove_temp=True)
+                vid.write_videofile(os.path.join(subdir,'{}_'.format(design)+vid_file), remove_temp=True)
+
+                tmp_frame_dir = osp.dirname(frame_paths[0])
+                shutil.rmtree(tmp_frame_dir)
+                print('Processed vid_file {}'.format(os.path.join(subdir,'{}'.format(design)+vid_file)))
+                videos_process_counter += 1
+                print('Processed {}/{} videos ({}%)'.format(videos_process_counter, len(videos), round((videos_process_counter/len(videos)),2)*100))
+                print('Actual processing time: {}min'.format(round(((time.time()-start_time)/60),2)))
 
 if __name__ == '__main__':
     main()
