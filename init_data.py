@@ -85,7 +85,6 @@ def pose_inference(model_pos, frame_paths, det_results):
         pose = inference_top_down_pose_model(model, f, d, format='xyxy')[0]
         ret.append(pose)
         # prog_bar.update()
-    print('\n')
     return ret
 
 # extract rgb skeleton and skeleton + rgb frames
@@ -146,6 +145,12 @@ def save_frame(frame, frame_width, frames_path, idx):
     img = cv2.resize(frame, (frame_width, frame.shape[0]*frame_width//frame.shape[1]))
     cv2.imwrite(os.path.join(frames_path, '%08d.png' % idx), img)
 
+# check if folders exists and create if needed
+def create_folders_if_not_exist(folder_path_list):
+    for folder_path in folder_path_list:
+        if not os.path.exists(folder_path):
+            os.makedirs(folder_path)
+
 
 # creare a working tree with skeleton, rgb and skeleton + rgb frames
 # working_folder/
@@ -169,16 +174,6 @@ def create_working_tree(working_folder, source_folder, frame_width=320, log=None
         frames_path_srgb = os.path.join(working_folder + '/srgb/', '/'.join(os.path.splitext(video_path)[0].split('/')[1:]))
         frames_path_rgb = os.path.join(working_folder + '/rgb/', '/'.join(os.path.splitext(video_path)[0].split('/')[1:]))
         if not os.path.exists(frames_path_s) or not os.path.exists(frames_path_srgb) or not os.path.exists(frames_path_rgb):
-            
-            # create folders that are evtualy missing
-            if not os.path.exists(frames_path_s):
-                os.makedirs(frames_path_s)
-
-            if not os.path.exists(frames_path_srgb):
-                os.makedirs(frames_path_srgb)
-
-            if not os.path.exists(frames_path_rgb):
-                os.makedirs(frames_path_rgb)
 
             frame_paths, original_frames = frame_extraction(video_path, 1080)
             num_frames = len(frame_paths)
@@ -190,9 +185,10 @@ def create_working_tree(working_folder, source_folder, frame_width=320, log=None
                 # extract the different frame types
                 frames_s, frames_srgb = get_skeleton_frames(model_det, model_pose, frame_paths[batch_idx * batch_size:(batch_idx + 1) * batch_size])
 
+                create_folders_if_not_exist([frames_path_s, frames_path_srgb, frames_path_rgb])
                 for i, frame in enumerate(frames_s):
                     save_frame(frame, frame_width, frames_path_s, (i + batch_idx * batch_size))
-
+                
                 for i, frame in enumerate(frames_srgb):
                     save_frame(frame, frame_width, frames_path_srgb, (i + batch_idx * batch_size))
 
@@ -204,7 +200,8 @@ def create_working_tree(working_folder, source_folder, frame_width=320, log=None
             if rest > 0:
                 frames_s, frames_srgb = get_skeleton_frames(model_det, model_pose, frame_paths[num_frames - rest:num_frames])
 
-
+                create_folders_if_not_exist([frames_path_s, frames_path_srgb, frames_path_rgb])
+                
                 for i, frame in enumerate(frames_s):
                     save_frame(frame, frame_width, frames_path_s, (i + num_frames - rest))
 

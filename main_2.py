@@ -31,6 +31,8 @@ if __name__ == "__main__":
     
     # Prepare work tree (respect levels for correct extraction of the frames)
     create_working_tree(working_folder, source_folder, frame_width=320, log=log)
+    print_and_log('Working tree created in %ds' % (time.time()-start_time), log=log)
+
 
     # Tasks
     # detection_task(working_folder, source_folder, log=log)
