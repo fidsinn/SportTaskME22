@@ -104,20 +104,26 @@ def get_skeleton_frames(model_det, model_pos, frame_paths):
     # TODO: remove static dimension and make them dynamicly set to in video dims
     vis_frames_s = []
     for i in range(num_frame):
-        vis_frames_s.append(vis_pose_result(model_pos, 
-                        np.zeros(shape=[1080, 1920, 3]),
-                        [{'no_box': [],'keypoints': pose_results[i][0]['keypoints']}],
-                        radius = 7,
-                        thickness=5))
+        if len(pose_results[i]) >= 1:
+            vis_frames_s.append(vis_pose_result(model_pos, 
+                            np.zeros(shape=[1080, 1920, 3]),
+                            [{'no_box': [],'keypoints': pose_results[i][0]['keypoints']}],
+                            radius = 14,
+                            thickness=10))
+        else:
+            vis_frames_s.append(np.zeros(shape=[1080, 1920, 3]))
 
     # visualise skeleton on rgb
     vis_frames_srgb = []
     for i in range(num_frame):
-        vis_frames_srgb.append(vis_pose_result(model_pos, 
-                        frame_paths[i],
-                        [{'no_box': [],'keypoints': pose_results[i][0]['keypoints']}],
-                        radius = 7,
-                        thickness=5))
+        if len(pose_results[i]) >= 1:
+            vis_frames_srgb.append(vis_pose_result(model_pos, 
+                            frame_paths[i],
+                            [{'no_box': [],'keypoints': pose_results[i][0]['keypoints']}],
+                            radius = 14,
+                            thickness=10))
+        else:
+            vis_frames_srgb.append(cv2.imread(frame_paths[i]))
 
     return vis_frames_s, vis_frames_srgb
 
@@ -201,7 +207,7 @@ def create_working_tree(working_folder, source_folder, frame_width=320, log=None
                 frames_s, frames_srgb = get_skeleton_frames(model_det, model_pose, frame_paths[num_frames - rest:num_frames])
 
                 create_folders_if_not_exist([frames_path_s, frames_path_srgb, frames_path_rgb])
-                
+
                 for i, frame in enumerate(frames_s):
                     save_frame(frame, frame_width, frames_path_s, (i + num_frames - rest))
 
