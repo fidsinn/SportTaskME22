@@ -3,6 +3,7 @@ __author__ = "Pierre-Etienne Martin"
 __copyright__ = "Copyright (C) 2022 Pierre-Etienne Martin"
 __license__ = "CC BY 4.0"
 __version__ = "1.0"
+import cv2
 import datetime
 import os
 import platform
@@ -11,12 +12,13 @@ import torch
 import xml.etree.ElementTree as ET
 import numpy as np
 import torch.optim as optim
+import json
 import pdb
+import traceback
 from torch.autograd import Variable
 from torch.utils.data import Dataset, DataLoader
 from utils import *
 from model import *
-import cv2
 print('Python version : ', platform.python_version())
 print('OpenCV version  : ', cv2.__version__)
 print('Torch version : ', torch.__version__)
@@ -28,14 +30,14 @@ print('Nb of threads for OpenCV : ', cv2.getNumThreads())
 Model variables
 '''
 class my_variables():
-    def __init__(self, working_path, task_name, size_data=[320,180,96], model_load=None, cuda=True, batch_size=3, workers=10, epochs=500, lr=0.01, nesterov=True, weight_decay=0.005, momentum=0.5):
+    def __init__(self, working_path, task_name, size_data=[320,180,96], model_load=None, cuda=True, batch_size=10, workers=10, epochs=2000, lr=0.0001, nesterov=True, weight_decay=0.005, momentum=0.5):
         self.size_data = np.array(size_data)
         self.cuda = cuda
         self.workers = workers
         self.batch_size = batch_size
         self.epochs = epochs
         self.lr = lr
-        self.lr_min = 0.000001
+        self.lr_min = 0.000005
         self.lr_max = 0.01
         self.nesterov = nesterov
         self.weight_decay = weight_decay
@@ -49,16 +51,19 @@ class my_variables():
         os.makedirs(self.model_name, exist_ok=True)
         if cuda:
             self.dtype = torch.cuda.FloatTensor
-            os.environ[ 'CUDA_VISIBLE_DEVICES' ] = '0'
+            os.environ[ 'CUDA_VISIBLE_DEVICES' ] = '1'
         else:
             self.dtype = torch.FloatTensor
-        self.log = setup_logger('model_log', os.path.join(self.model_name, 'model.log'))
+        self.log = setup_logger('model_log', os.path.join(self.model_name, 'model_%s.log' % (datetime.datetime.now().strftime('%Y-%m-%d_%H-%M-%S'))))
+
+        with open(os.path.join(self.model_name, 'model_info.json'), 'w') as f:
+            json.dump(str(self.__dict__.copy()), f, indent=4)
 
 
 '''
 My_dataset class which uses My_stroke class to be used in the data loader
 '''
-class My_dataset(Dataset):
+clas(Dataset):
     def __init__(self, dataset_list, size_data, augmentation=False):
         self.dataset_list = dataset_list
         self.size_data = size_data
@@ -192,7 +197,8 @@ Model Architecture
 '''
 def make_architecture(args, output_size):
     print_and_log('Make Model', log=args.log)
-    model = CCNAttentionNet(args.size_data.copy(), output_size)
+    model = CCNAttentionNetV1(args.size_data.copy(), output_size)
+    print_and_log('Model %s created' % (model.__class__.__name__), log=args.log)
     ## Use GPU
     if args.cuda:
         model.cuda()
@@ -208,7 +214,7 @@ def save_checkpoint(args, model, optimizer, epoch, val_loss):
 
 def load_checkpoint(model, args, optimizer=None):
     checkpoint = torch.load(os.path.join(args.model_name, 'checkpoint.pth'))
-    model.load_state_dict(checkpoint['model_state_dict'], map_location=lambda storage, loc: storage)
+    model.load_state_dict(checkpoint['model_state_dict']) #, map_location=lambda storage, loc: storage
     # model.load_state_dict(checkpoint['model_state_dict'])
     if optimizer is not None:
         optimizer.load_state_dict(checkpoint['optimizer_state_dict'])
@@ -266,7 +272,7 @@ def train_model(model, args, train_loader, validation_loader):
 
         # Change lr according to evolution of the loss
         if wait_change_lr > 30:
-            if np.mean(loss_train[-30:-10]) > .99*np.mean(loss_train[-10:]):
+            if .99*np.mean(loss_train[-30:-10]) < np.mean(loss_train[-10:]):
                 print_and_log("Diff Loss : %g" % (np.mean(loss_train[-30:-10])-np.mean(loss_train[-10:])), log=args.log)
                 load_checkpoint(model, args, optimizer)
                 if args.lr < args.lr_min:
@@ -275,7 +281,7 @@ def train_model(model, args, train_loader, validation_loader):
                     change_lr(optimizer, args, args.lr/5)
                 wait_change_lr = 0
 
-    print_and_log('Best model obtained with acc of %.3g, loss of %.3g at epoch %d - time for training: %ds)' % (max_acc, min_loss_val, best_epoch, int(time.time()-start_time)), log=args.log)
+    print_and_log('Best model obtained with acc of %.3g, loss of %.3g at epoch %d - time for training: %ds' % (max_acc, min_loss_val, best_epoch, int(time.time()-start_time)), log=args.log)
     make_train_figure(loss_train, loss_val, acc_val, acc_train, os.path.join(args.model_name, 'Train.png'))
     return 1
 
@@ -317,6 +323,7 @@ Validation of the model in one epoch
 '''
 def validation_epoch(epoch, args, model, data_loader, criterion):
     with torch.no_grad():
+        model.eval() # Set model to evaluation mode - needed for batchnorm
         begin_time = time.time()
         pid = os.getpid()
         N = len(data_loader.dataset)
@@ -347,18 +354,19 @@ def store_xml_data(my_stroke_list, predicted, xml_files, list_of_strokes=None):
     '''
     for video_path, begin, end, prediction_index in zip(my_stroke_list['video_path'], my_stroke_list['begin'].tolist(), my_stroke_list['end'].tolist(), predicted):
         video_name = video_path.split('/')[-1]
-        if video_name not in xml_files:
-            xml_files[video_name] = ET.Element('video')
         if list_of_strokes is None:
+            if video_name not in xml_files:
+                xml_files[video_name] = ET.Element('video')
             if prediction_index:
                 stroke_xml = ET.SubElement(xml_files[video_name], 'action')
                 stroke_xml.set('begin', str(begin))
                 stroke_xml.set('end', str(end))
         else:
-            stroke_xml = ET.SubElement(xml_files[video_name], 'action')
-            stroke_xml.set('begin', str(begin))
-            stroke_xml.set('end', str(end))
-            stroke_xml.set('move', list_of_strokes[prediction_index])
+            if 'test' not in xml_files:
+                xml_files['test'] = ET.Element('videos')
+            stroke_xml = ET.SubElement(xml_files['test'], 'video')
+            stroke_xml.set('name', '%s.mp4' % (video_name))
+            stroke_xml.set('class', list_of_strokes[prediction_index])
 
 def store_stroke_to_xml(my_stroke_list, xml_files, list_of_strokes=None):
     '''
@@ -366,26 +374,27 @@ def store_stroke_to_xml(my_stroke_list, xml_files, list_of_strokes=None):
     '''
     for my_stroke in my_stroke_list:
         video_name = my_stroke.video_path.split('/')[-1]
-        if video_name not in xml_files:
-            xml_files[video_name] = ET.Element('video')
         if list_of_strokes is None:
+            if video_name not in xml_files:
+                xml_files[video_name] = ET.Element('video')
             if my_stroke.move:
                 stroke_xml = ET.SubElement(xml_files[video_name], 'action')
                 stroke_xml.set('begin', str(my_stroke.begin))
                 stroke_xml.set('end', str(my_stroke.end))
         else:
-            stroke_xml = ET.SubElement(xml_files[video_name], 'action')
-            stroke_xml.set('begin', str(my_stroke.begin))
-            stroke_xml.set('end', str(my_stroke.end))
-            stroke_xml.set('move', list_of_strokes[my_stroke.move])
+            if 'test' not in xml_files:
+                xml_files['test'] = ET.Element('videos')
+            stroke_xml = ET.SubElement(xml_files['test'], 'video')
+            stroke_xml.set('name', '%s.mp4' % (video_name))
+            stroke_xml.set('class', list_of_strokes[my_stroke.move])
 
 '''
 Save the predictions in xml files
 '''
 def save_xml_data(xml_files, path_xml_save):
-    for video_name in xml_files:
-        xml_file = open('%s.xml' % os.path.join(path_xml_save, video_name), 'wb')
-        xml_file.write(ET.tostring(xml_files[video_name]))
+    for xml_name in xml_files:
+        xml_file = open('%s.xml' % os.path.join(path_xml_save, xml_name), 'wb')
+        xml_file.write(ET.tostring(xml_files[xml_name]))
         xml_file.close()
 
 '''
@@ -393,6 +402,7 @@ Inference on test set
 '''
 def test_model(model, args, data_loader, list_of_strokes=None):
     with torch.no_grad():
+        model.eval() # Set model to evaluation mode - needed for batchnorm
         xml_files = {}
         path_xml_save = os.path.join(args.model_name, 'xml_test')
         os.mkdir(path_xml_save)
@@ -406,13 +416,14 @@ def test_model(model, args, data_loader, list_of_strokes=None):
             rgb = Variable(rgb.type(args.dtype))
             output = model(rgb)
             _, predicted = torch.max(output.detach(), 1)
-            store_xml_data(my_stroke_list, predicted, xml_files, list_of_strokes)
+            store_xml_data(my_stroke_list, predicted, xml_files, list_of_strokes=list_of_strokes)
 
         progress_bar(N, N, 'Test done', 1, log=args.log)
         save_xml_data(xml_files, path_xml_save)
 
 def test_prob_and_vote(model, args, test_list, list_of_strokes=None):
     with torch.no_grad():
+        model.eval() # Set model to evaluation mode - needed for batchnorm
         xml_files_vote = {}
         path_xml_save_vote = os.path.join(args.model_name, 'xml_test_vote')
         os.mkdir(path_xml_save_vote)
@@ -468,7 +479,6 @@ def infer_stroke_list_from_vector(video_path, vector_decision, threshold=30):
     '''
     vector_decision = np.array(vector_decision)>0
     begin = -1
-    end = -1
     stroke_list = []
     for idx, frame_decision in enumerate(vector_decision):
         if frame_decision and begin==-1:
@@ -477,13 +487,17 @@ def infer_stroke_list_from_vector(video_path, vector_decision, threshold=30):
             if idx-begin>=threshold:
                 stroke_list.append(My_stroke(video_path, begin, idx, 1))
             begin = -1
+    # Case if last element is True
+    if frame_decision and begin != -1:
+        if idx-begin>=threshold:
+            stroke_list.append(My_stroke(video_path, begin, idx, 1))
     return stroke_list
 
 def compute_strokes_from_predictions(video_path, all_probs, size_data, window_decision=100):
     # Repeat the first and last prediction to center all predictions #
-    predictions = [all_probs[0]]*size_data[2]
+    predictions = [all_probs[0]]*(size_data[2]//2)
     predictions.extend(all_probs)
-    predictions.extend([all_probs[-1]]*size_data[2])
+    predictions.extend([all_probs[-1]]*(size_data[2]//2))
 
     # Vote decision #
     vote_list = [[1. if prob == max(probs) else 0 for prob in probs] for probs in predictions]
@@ -504,8 +518,9 @@ def compute_strokes_from_predictions(video_path, all_probs, size_data, window_de
 
     return vote_strokes, mean_strokes, gaussian_strokes
 
-def test_videos_segmentation(model, args, test_list, list_of_strokes=None):
+def test_videos_segmentation(model, args, test_list, sum_stroke_scores=False):
     with torch.no_grad():
+        model.eval() # Set model to evaluation mode - needed for batchnorm
         xml_files_vote = {}
         path_xml_save_vote = os.path.join(args.model_name, 'xml_testseg_vote')
         os.mkdir(path_xml_save_vote)
@@ -516,6 +531,17 @@ def test_videos_segmentation(model, args, test_list, list_of_strokes=None):
         path_xml_save_gaussian = os.path.join(args.model_name, 'xml_testseg_gaussian')
         os.mkdir(path_xml_save_gaussian)
 
+        if sum_stroke_scores:
+            xml_files_vote_scoresummed = {}
+            path_xml_save_vote_scoresummed = os.path.join(args.model_name, 'xml_testseg_vote_scoresummed')
+            os.mkdir(path_xml_save_vote_scoresummed)
+            xml_files_mean_scoresummed = {}
+            path_xml_save_mean_scoresummed = os.path.join(args.model_name, 'xml_testseg_mean_scoresummed')
+            os.mkdir(path_xml_save_mean_scoresummed)
+            xml_files_gaussian_scoresummed = {}
+            path_xml_save_gaussian_scoresummed = os.path.join(args.model_name, 'xml_testseg_gaussian_scoresummed')
+            os.mkdir(path_xml_save_gaussian_scoresummed)
+
         for idx, my_stroke in enumerate(test_list):
             progress_bar(idx, len(test_list), 'Window Testing')
 
@@ -523,22 +549,34 @@ def test_videos_segmentation(model, args, test_list, list_of_strokes=None):
             test_set = My_dataset_temporal(my_stroke, args.size_data, augmentation=False)
             test_loader = DataLoader(test_set, batch_size=args.batch_size, shuffle=False, num_workers=args.workers)
 
-            for batch in test_loader:
+            for idx, batch in enumerate(test_loader):
                 rgb = batch['rgb']
                 rgb = Variable(rgb.type(args.dtype))
                 output = model(rgb)                
                 all_probs.extend(output.data.tolist())
-
             vote_strokes, mean_strokes, gaussian_strokes = compute_strokes_from_predictions(my_stroke.video_path, all_probs, args.size_data)
 
-            store_stroke_to_xml(vote_strokes, xml_files_vote, list_of_strokes)
-            store_stroke_to_xml(mean_strokes, xml_files_mean, list_of_strokes)
-            store_stroke_to_xml(gaussian_strokes, xml_files_gaussian, list_of_strokes)
+            store_stroke_to_xml(vote_strokes, xml_files_vote)
+            store_stroke_to_xml(mean_strokes, xml_files_mean)
+            store_stroke_to_xml(gaussian_strokes, xml_files_gaussian)
+
+            if sum_stroke_scores:
+                all_probs_scoresummed = [[probs[0], probs[1:].sum()] for probs in all_probs]
+                vote_strokes_scoresummed, mean_strokes_scoresummed, gaussian_strokes_scoresummed = compute_strokes_from_predictions(my_stroke.video_path, all_probs_scoresummed, args.size_data)
+                
+                store_stroke_to_xml(vote_strokes_scoresummed, xml_files_vote_scoresummed)
+                store_stroke_to_xml(mean_strokes_scoresummed, xml_files_mean_scoresummed)
+                store_stroke_to_xml(gaussian_strokes_scoresummed, xml_files_gaussian_scoresummed)
 
         progress_bar(len(test_list), len(test_list), 'Window Testing Done', 1, log=args.log)
         save_xml_data(xml_files_vote, path_xml_save_vote)
         save_xml_data(xml_files_mean, path_xml_save_mean)
         save_xml_data(xml_files_gaussian, path_xml_save_gaussian)
+
+        if sum_stroke_scores:
+            save_xml_data(xml_files_vote_scoresummed, path_xml_save_vote_scoresummed)
+            save_xml_data(xml_files_mean_scoresummed, path_xml_save_mean_scoresummed)
+            save_xml_data(xml_files_gaussian_scoresummed, path_xml_save_gaussian_scoresummed)
     return 1
 
 
@@ -626,7 +664,7 @@ def classification_task(working_folder, log=None, test_strokes_segmentation=None
     Perform also on the detection task when the videos for segmentation are provided
     '''
     print_and_log('\nClassification Task', log=log)
-    # Initial list
+    # Initialization
     reset_training(1)
     task_name = 'classificationTask'
     task_path = os.path.join(working_folder, task_name)
@@ -649,10 +687,10 @@ def classification_task(working_folder, log=None, test_strokes_segmentation=None
     
     # Test process
     load_checkpoint(model, args)
-    test_model(model, args, test_loader, list_of_strokes)
-    test_prob_and_vote(model, args, test_strokes, list_of_strokes)
+    test_model(model, args, test_loader, list_of_strokes=list_of_strokes)
+    test_prob_and_vote(model, args, test_strokes, list_of_strokes=list_of_strokes)
     if test_strokes_segmentation is not None:
-        test_videos_segmentation(model, args, test_strokes_segmentation)
+        test_videos_segmentation(model, args, test_strokes_segmentation, sum_stroke_scores=True)
     return 1
 
 '''
@@ -702,7 +740,7 @@ def detection_task(working_folder, source_folder, log=None):
     Return test segmentation video to try with the classification model
     '''
     print_and_log('\nDetection Task', log=log)
-    # Initial list
+    # Initialization
     reset_training(1)
     task_name = 'detectionTask'
     task_path = os.path.join(working_folder, task_name)
@@ -736,11 +774,7 @@ if __name__ == "__main__":
     # Chrono
     start_time = time.time()
 
-    #torch gpu check
-    print('torch.cuda.is_available:',torch.cuda.is_available())
-    print('torch.cuda.device_count:',torch.cuda.device_count())
-    #print('torch.cuda.current_device:',torch.cuda.current_device())
-    #print('torch.cuda.get_device_name:',torch.cuda.get_device_name(0))
+    print('Working GPU device:',torch.cuda.get_device_name(torch.cuda.current_device()))
 
     # MediaEval Task source folder
     source_folder = 'data'
