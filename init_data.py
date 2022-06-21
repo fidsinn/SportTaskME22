@@ -63,28 +63,28 @@ def detection_inference(model,  det_score_thr, frame_paths):
     assert model.CLASSES[0] == 'person', ('We require you to use a detector '
                                           'trained on COCO')
     results = []
-    print('\nPerforming Human Detection for each frame')
-    prog_bar = mmcv.ProgressBar(len(frame_paths))
+    # print('\nPerforming Human Detection for each frame')
+    # prog_bar = mmcv.ProgressBar(len(frame_paths))
     for frame_path in frame_paths:
         result = inference_detector(model, frame_path)
         # We only keep human detections with score larger than det_score_thr
         result = result[0][result[0][:, 4] >= det_score_thr]
         results.append(result)
-        prog_bar.update()
+        # prog_bar.update()
     return results
 
 
 def pose_inference(model_pos, frame_paths, det_results):
     model = model_pos
     ret = []
-    print('\nPerforming Human Pose Estimation for each frame')
-    prog_bar = mmcv.ProgressBar(len(frame_paths))
+    # print('\nPerforming Human Pose Estimation for each frame')
+    # prog_bar = mmcv.ProgressBar(len(frame_paths))
     for f, d in zip(frame_paths, det_results):
         # Align input format
         d = [dict(bbox=x) for x in list(d)]
         pose = inference_top_down_pose_model(model, f, d, format='xyxy')[0]
         ret.append(pose)
-        prog_bar.update()
+        # prog_bar.update()
     return ret
 
 # extract rgb skeleton and skeleton + rgb frames
@@ -177,26 +177,28 @@ def create_working_tree(working_folder, source_folder, frame_width=320, log=None
     
     for idx, video_path in enumerate(list_of_videos):
         progress_bar(idx, len(list_of_videos), 'Frame + Pose extraction of:\n%s\n' % (video_path))
+
         frames_path_s = os.path.join(working_folder + '/s/', '/'.join(os.path.splitext(video_path)[0].split('/')[1:]))
         frames_path_srgb = os.path.join(working_folder + '/srgb/', '/'.join(os.path.splitext(video_path)[0].split('/')[1:]))
         frames_path_rgb = os.path.join(working_folder + '/rgb/', '/'.join(os.path.splitext(video_path)[0].split('/')[1:]))
-        if not os.path.exists(frames_path_s) or not os.path.exists(frames_path_srgb) or not os.path.exists(frames_path_rgb):
+
+        if not os.path.exists(frames_path_rgb):
             
-            create_folders_if_not_exist([frames_path_rgb])
+            create_folders_if_not_exist([frames_path_rgb, frames_path_s, frames_path_srgb])
             frame_extractor(video_path, 1080, frames_path_rgb)
-            print('Frame extraction done in %ds\n' % (time.time()-start_time))
+            print('Frame extraction done in %ds\n' % (time.time() - start_time))
             
+            # get paths to rgb frames to performe pose estimation
             paths_rgb = getListOfFiles(frames_path_rgb)
             num_frames = len(paths_rgb)
+
             # batch the frame extraction to be more frindly to memory 
             # and to avoid process termination by server
             num_of_batches = int((num_frames - (num_frames % batch_size)) / batch_size) 
             
             for batch_idx in range(0, num_of_batches):
                 # extract the different frame types
-                frames_s, frames_srgb = get_skeleton_frames(model_det, model_pose, paths_rgb[batch_idx * batch_size:(batch_idx + 1) * batch_size])
-                
-                create_folders_if_not_exist([frames_path_s, frames_path_srgb])              
+                frames_s, frames_srgb = get_skeleton_frames(model_det, model_pose, paths_rgb[batch_idx * batch_size:(batch_idx + 1) * batch_size])          
 
                 for i, frame in enumerate(frames_s):
                     save_frame(frame, frame_width, frames_path_s, (i + batch_idx * batch_size))
@@ -209,15 +211,12 @@ def create_working_tree(working_folder, source_folder, frame_width=320, log=None
             if rest > 0:
                 frames_s, frames_srgb = get_skeleton_frames(model_det, model_pose, paths_rgb[num_frames - rest:num_frames])
 
-                create_folders_if_not_exist([frames_path_s, frames_path_srgb])
-
                 for i, frame in enumerate(frames_s):
                     save_frame(frame, frame_width, frames_path_s, (i + num_frames - rest))
 
                 for i, frame in enumerate(frames_srgb):
                     save_frame(frame, frame_width, frames_path_srgb, (i + num_frames - rest))
 
-        progress_bar(idx+1, len(list_of_videos), 'Frame + Pose extraction done in %ds\n' % (time.time()-start_time), 1, log=log)
-
+        progress_bar(idx+1, len(list_of_videos), 'Frame + Pose extraction done in %ds\n' % (time.time() - start_time), 1, log=log)
 
     return 1
