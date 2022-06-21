@@ -63,28 +63,28 @@ def detection_inference(model,  det_score_thr, frame_paths):
     assert model.CLASSES[0] == 'person', ('We require you to use a detector '
                                           'trained on COCO')
     results = []
-    # print('\nPerforming Human Detection for each frame')
-    # prog_bar = mmcv.ProgressBar(len(frame_paths))
+    print('\nPerforming Human Detection for each frame')
+    prog_bar = mmcv.ProgressBar(len(frame_paths))
     for frame_path in frame_paths:
         result = inference_detector(model, frame_path)
         # We only keep human detections with score larger than det_score_thr
         result = result[0][result[0][:, 4] >= det_score_thr]
         results.append(result)
-        # prog_bar.update()
+        prog_bar.update()
     return results
 
 
 def pose_inference(model_pos, frame_paths, det_results):
     model = model_pos
     ret = []
-    # print('\nPerforming Human Pose Estimation for each frame')
-    # prog_bar = mmcv.ProgressBar(len(frame_paths))
+    print('\nPerforming Human Pose Estimation for each frame')
+    prog_bar = mmcv.ProgressBar(len(frame_paths))
     for f, d in zip(frame_paths, det_results):
         # Align input format
         d = [dict(bbox=x) for x in list(d)]
         pose = inference_top_down_pose_model(model, f, d, format='xyxy')[0]
         ret.append(pose)
-        # prog_bar.update()
+        prog_bar.update()
     return ret
 
 # extract rgb skeleton and skeleton + rgb frames
@@ -158,6 +158,7 @@ def create_folders_if_not_exist(folder_path_list):
             os.makedirs(folder_path)
 
 
+
 # creare a working tree with skeleton, rgb and skeleton + rgb frames
 # working_folder/
 #   s/...
@@ -166,7 +167,7 @@ def create_folders_if_not_exist(folder_path_list):
 def create_working_tree(working_folder, source_folder, frame_width=320, log=None):
     # Chrono
     start_time = time.time()
-    batch_size = 20000
+    batch_size = 500
     # Get all the videos and extract the RGB frames in the working_folder directory.
     list_of_videos = [f for f in getListOfFiles(os.path.join(source_folder)) if f.endswith('.mp4') and 's_' not in f ]
 
@@ -187,7 +188,16 @@ def create_working_tree(working_folder, source_folder, frame_width=320, log=None
             # batch the frame extraction to be more frindly to memory 
             # and to avoid process termination by server
             num_of_batches = int((num_frames - (num_frames % batch_size)) / batch_size) 
-            for batch_idx in range(0, num_of_batches):
+            
+            # if there are multiple batches needed check if there are alredy some frames extracted
+            # and start from the batch which is incomplete
+            start_batch = 0
+            if num_of_batches >= 1 and os.path.exists(frames_path_rgb):
+                max_frame = len(os.listdir(frames_path_rgb))
+                passed_batches = int((max_frame - (max_frame % batch_size)) / batch_size) 
+                start_batch = passed_batches
+
+            for batch_idx in range(start_batch, num_of_batches):
                 # extract the different frame types
                 frames_s, frames_srgb = get_skeleton_frames(model_det, model_pose, frame_paths[batch_idx * batch_size:(batch_idx + 1) * batch_size])
 
