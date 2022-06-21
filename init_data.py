@@ -158,6 +158,7 @@ def create_folders_if_not_exist(folder_path_list):
             os.makedirs(folder_path)
 
 
+
 # creare a working tree with skeleton, rgb and skeleton + rgb frames
 # working_folder/
 #   s/...
@@ -166,7 +167,7 @@ def create_folders_if_not_exist(folder_path_list):
 def create_working_tree(working_folder, source_folder, frame_width=320, log=None):
     # Chrono
     start_time = time.time()
-    batch_size = 20000
+    batch_size = 500
     # Get all the videos and extract the RGB frames in the working_folder directory.
     list_of_videos = [f for f in getListOfFiles(os.path.join(source_folder)) if f.endswith('.mp4') and 's_' not in f ]
 
@@ -175,53 +176,47 @@ def create_working_tree(working_folder, source_folder, frame_width=320, log=None
     model_det, model_pose = init_mmpose()
     
     for idx, video_path in enumerate(list_of_videos):
-        progress_bar(idx, len(list_of_videos), 'Frame + pose extraction of:\n%s\n' % (video_path))
+        progress_bar(idx, len(list_of_videos), 'Frame + Pose extraction of:\n%s\n' % (video_path))
+
         frames_path_s = os.path.join(working_folder + '/s/', '/'.join(os.path.splitext(video_path)[0].split('/')[1:]))
         frames_path_srgb = os.path.join(working_folder + '/srgb/', '/'.join(os.path.splitext(video_path)[0].split('/')[1:]))
         frames_path_rgb = os.path.join(working_folder + '/rgb/', '/'.join(os.path.splitext(video_path)[0].split('/')[1:]))
-        if not os.path.exists(frames_path_s) or not os.path.exists(frames_path_srgb) or not os.path.exists(frames_path_rgb):
 
-            frame_paths, original_frames = frame_extraction(video_path, 1080)
-            num_frames = len(frame_paths)
+        if not os.path.exists(frames_path_rgb):
             
+            create_folders_if_not_exist([frames_path_rgb, frames_path_s, frames_path_srgb])
+            frame_extractor(video_path, 1080, frames_path_rgb)
+            print('Frame extraction done in %ds\n' % (time.time() - start_time))
+            
+            # get paths to rgb frames to performe pose estimation
+            paths_rgb = getListOfFiles(frames_path_rgb)
+            num_frames = len(paths_rgb)
+
             # batch the frame extraction to be more frindly to memory 
             # and to avoid process termination by server
             num_of_batches = int((num_frames - (num_frames % batch_size)) / batch_size) 
+            
             for batch_idx in range(0, num_of_batches):
                 # extract the different frame types
-                frames_s, frames_srgb = get_skeleton_frames(model_det, model_pose, frame_paths[batch_idx * batch_size:(batch_idx + 1) * batch_size])
+                frames_s, frames_srgb = get_skeleton_frames(model_det, model_pose, paths_rgb[batch_idx * batch_size:(batch_idx + 1) * batch_size])          
 
-                create_folders_if_not_exist([frames_path_s, frames_path_srgb, frames_path_rgb])
                 for i, frame in enumerate(frames_s):
                     save_frame(frame, frame_width, frames_path_s, (i + batch_idx * batch_size))
                 
                 for i, frame in enumerate(frames_srgb):
                     save_frame(frame, frame_width, frames_path_srgb, (i + batch_idx * batch_size))
 
-                for i, frame in enumerate(original_frames[batch_idx * batch_size:(batch_idx + 1) * batch_size]):
-                    save_frame(frame, frame_width, frames_path_rgb, (i + batch_idx * batch_size))
-
             # go over rest of frames
             rest = num_frames % batch_size
             if rest > 0:
-                frames_s, frames_srgb = get_skeleton_frames(model_det, model_pose, frame_paths[num_frames - rest:num_frames])
-
-                create_folders_if_not_exist([frames_path_s, frames_path_srgb, frames_path_rgb])
+                frames_s, frames_srgb = get_skeleton_frames(model_det, model_pose, paths_rgb[num_frames - rest:num_frames])
 
                 for i, frame in enumerate(frames_s):
                     save_frame(frame, frame_width, frames_path_s, (i + num_frames - rest))
 
                 for i, frame in enumerate(frames_srgb):
                     save_frame(frame, frame_width, frames_path_srgb, (i + num_frames - rest))
-                
-                for i, frame in enumerate(original_frames[num_frames - rest:num_frames]):
-                    save_frame(frame, frame_width, frames_path_rgb, (i + num_frames - rest))
 
-            # clear tmp folder from created frames 
-            tmp_frame_dir = osp.dirname(frame_paths[0])
-            shutil.rmtree(tmp_frame_dir)
-
-        progress_bar(idx+1, len(list_of_videos), 'Frame + pose extraction done in %ds\n' % (time.time()-start_time), 1, log=log)
-
+        progress_bar(idx+1, len(list_of_videos), 'Frame + Pose extraction done in %ds\n' % (time.time() - start_time), 1, log=log)
 
     return 1
