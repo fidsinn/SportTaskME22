@@ -189,15 +189,7 @@ def create_working_tree(working_folder, source_folder, frame_width=320, log=None
             # and to avoid process termination by server
             num_of_batches = int((num_frames - (num_frames % batch_size)) / batch_size) 
             
-            # if there are multiple batches needed check if there are alredy some frames extracted
-            # and start from the batch which is incomplete
-            start_batch = 0
-            if num_of_batches >= 1 and os.path.exists(frames_path_rgb):
-                max_frame = len(os.listdir(frames_path_rgb))
-                passed_batches = int((max_frame - (max_frame % batch_size)) / batch_size) 
-                start_batch = passed_batches
-
-            for batch_idx in range(start_batch, num_of_batches):
+            for batch_idx in range(0, num_of_batches):
                 # extract the different frame types
                 frames_s, frames_srgb = get_skeleton_frames(model_det, model_pose, frame_paths[batch_idx * batch_size:(batch_idx + 1) * batch_size])
 
