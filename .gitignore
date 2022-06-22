@@ -4,6 +4,8 @@ data_lite/
 tmp/
 private/
 working_folder/
+working_folder_rgb/
 working_folder_s/
+working_folder_srgb/
 mmpose_utils/tmp/
 __pycache__/
