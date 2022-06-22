@@ -1,7 +1,7 @@
 import os
 import time
 import os.path as osp
-import shutil
+import gc
 
 import cv2
 import mmcv
@@ -216,7 +216,8 @@ def create_working_tree(working_folder, source_folder, frame_width=320, log=None
 
                 for i, frame in enumerate(frames_srgb):
                     save_frame(frame, frame_width, frames_path_srgb, (i + num_frames - rest))
-
+                
+        gc.collect()
         progress_bar(idx+1, len(list_of_videos), 'Frame + Pose extraction done in %ds\n' % (time.time() - start_time), 1, log=log)
 
     return 1
