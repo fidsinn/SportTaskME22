@@ -17,8 +17,11 @@ import pdb
 import traceback
 from torch.autograd import Variable
 from torch.utils.data import Dataset, DataLoader
+
 from utils import *
 from model import *
+from init_data import create_working_tree
+
 
 import argparse
 import sys
@@ -683,8 +686,8 @@ def classification_task(working_folder, stream_design, log=None, test_strokes_se
     # Initialization
     reset_training(1)
     task_name = 'classificationTask'
-    task_path = os.path.join(working_folder, task_name)
-
+    task_path = os.path.join(working_folder, stream_design, task_name)
+    print(task_path)
     # Split
     train_strokes, validation_strokes, test_strokes = get_classification_strokes(task_path)
 
@@ -845,7 +848,8 @@ if __name__ == "__main__":
     log = setup_logger('my_log', os.path.join(log_folder, '%s.log' % (datetime.datetime.now().strftime('%Y-%m-%d_%H-%M_{}-{}'.format(1, args.stream_design)))))
     
     # Prepare work tree (respect levels for correct extraction of the frames)
-    make_work_tree(working_folder, source_folder, args.stream_design, frame_width=320, log=log)
+    # make_work_tree(working_folder, source_folder, args.stream_design, frame_width=320, log=log)
+    create_working_tree(working_folder, source_folder, frame_width=320, log=log)
 
     if args.test_include == 'test':
         test_include=get_videos_list(os.path.join(working_folder, 'detectionTask', 'test'))
