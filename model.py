@@ -335,3 +335,18 @@ class CCNAttentionNetV2(nn.Module):
         features = self.activation(self.linear1(features))
         features = self.linear2(features)
         return self.final(features)
+
+class CCNAttentionNet_TwoStream(nn.Module):
+    def __init__(self, size_data, n_classes, in_dim=3, filters=[8,16,32,64,128,256], cuda=True):
+        super(CCNAttentionNet_TwoStream, self).__init__()
+
+        self.stream_one = CCNAttentionNetV1(size_data, n_classes)
+        self.stream_two = CCNAttentionNetV1(size_data, n_classes)
+        ## Use GPU
+        if cuda:
+            self.cuda()
+
+    def forward(self, features_s1, features_s2):
+        s1_out = self.stream_one(features_s1)
+        s2_out = self.stream_two(features_s2)
+        return s1_out + s2_out
