@@ -2,7 +2,9 @@ import os
 import time
 import datetime
 import torch
+import torch.optim as optim
 from torch.utils.data import Dataset, DataLoader
+from torch.autograd import Variable
 import json
 
 from utils import *
@@ -59,7 +61,7 @@ class My_stroke:
         elif move == 'Unknown':
             self.move = 0
         else:
-            self.move = list_of_strokes.index(move)
+            self.move = LIST_OF_STROKES.index(move)
 
     def my_print(self, log=None):
         print_and_log('Video : %s\tbegin : %d\tEnd : %d\tClass : %s' % (self.video_path, self.begin, self.end, self.move), log=log)
@@ -88,7 +90,7 @@ class My_dataset(Dataset):
 '''
 According to overview paper
 '''
-list_of_strokes = [
+LIST_OF_STROKES = [
     'Negative',
     
     'Serve Forehand Backspin',
@@ -210,16 +212,103 @@ Model Architecture
 '''
 def make_architecture(args, output_size):
     print_and_log('Make Model', log=args.log)
-    model = CCNAttentionNetV1(args.size_data.copy(), output_size)
+    model = CCNAttentionNet_TwoStream(args.size_data.copy(), output_size)
     print_and_log('Model %s created' % (model.__class__.__name__), log=args.log)
     ## Use GPU
     if args.cuda:
         model.cuda()
     return model
 
+'''
+Training is split in train epoch and validation epoch and produce a plot
+'''
+def train_model(model, args, train_loader, validation_loader):
+    criterion = nn.CrossEntropyLoss(reduction='sum')
+    optimizer = optim.SGD(model.parameters(), lr=args.lr, momentum=args.momentum, weight_decay=args.weight_decay, nesterov=args.nesterov)
+
+    # Chrono
+    start_time = time.time()
+    print_and_log('\nTraining...', log=args.log)
+
+    # For plot
+    loss_train = []
+    loss_val = []
+    acc_val = []
+    acc_train = []
+    min_loss_val = 1000
+    max_acc = 0
+    wait_change_lr = 0
+    best_epoch = 0
+
+    for epoch in range(args.epochs):
+        # Train and validation step and save loss and acc for plot
+        loss_train_, acc_train_ = train_epoch(epoch, args, model, train_loader, optimizer, criterion)
+        loss_val_, acc_val_ = validation_epoch(epoch, args, model, validation_loader, criterion)
+
+        loss_train.append(loss_train_)
+        acc_train.append(acc_train_)
+        loss_val.append(loss_val_)
+        acc_val.append(acc_val_)
+        wait_change_lr += 1
+
+        # Best model saved accoridng to loss
+        if loss_val_ < min_loss_val:
+            save_checkpoint(args, model, optimizer, epoch, loss_val)
+            min_loss_val = loss_val_
+            max_acc = acc_val_
+            best_epoch = epoch
+            wait_change_lr = 0
+
+        # Change lr according to evolution of the loss
+        if wait_change_lr > 30:
+            if .99*np.mean(loss_train[-30:-10]) < np.mean(loss_train[-10:]):
+                print_and_log("Diff Loss : %g" % (np.mean(loss_train[-30:-10])-np.mean(loss_train[-10:])), log=args.log)
+                load_checkpoint(model, args, optimizer)
+                if args.lr < args.lr_min:
+                    change_lr(optimizer, args, args.lr_max)
+                else:
+                    change_lr(optimizer, args, args.lr/5)
+                wait_change_lr = 0
+
+    print_and_log('Best model obtained with acc of %.3g, loss of %.3g at epoch %d - time for training: %ds' % (max_acc, min_loss_val, best_epoch, int(time.time()-start_time)), log=args.log)
+    make_train_figure(loss_train, loss_val, acc_val, acc_train, os.path.join(args.model_name, 'Train.png'))
+    return 1
+
+'''
+Update of the model in one epoch
+'''
+def train_epoch(epoch, args, model, data_loader, optimizer, criterion):
+    model.train()
+    pid = os.getpid()
+    N = len(data_loader.dataset)
+    begin_time = time.time()
+    aLoss = 0
+    Acc = 0
+
+    for batch_idx, batch in enumerate(data_loader):
+        # Get batch tensor
+        rgb, label = batch['rgb'], batch['label']
+
+        rgb = Variable(rgb.type(args.dtype))
+        label = Variable(label.type(args.dtype).long())
+
+        optimizer.zero_grad()
+        output = model(rgb)
+        loss = criterion(output, label)
+        loss.backward()
+        optimizer.step()
+
+        aLoss += loss.item()
+        Acc += output.data.max(1)[1].eq(label.data).cpu().sum().numpy()
+        progress_bar((batch_idx + 1) * args.batch_size, N, '%d Training - Epoch : %d - Batch Loss = %.5g' % (pid, epoch, loss.item()))
+
+    aLoss /= N
+    progress_bar(N, N, 'Train - Epoch %d - Loss = %.5g - Accuracy = %.3g (%d/%d) - Time = %ds' % (epoch, aLoss, Acc/N, Acc, N, time.time() - begin_time), 1, log=args.log)
+    return aLoss, Acc/N
+
 
 # Classification Task
-
+# Get Stroke labels from the directory structure and save it in the My_stroke class
 def get_classification_strokes(working_folder_task):
     set_path = os.path.join(working_folder_task, 'train')
     train_strokes = [My_stroke(os.path.join(set_path, action_class, f), 0, len(os.listdir(os.path.join(set_path, action_class, f))), action_class)
@@ -231,7 +320,7 @@ def get_classification_strokes(working_folder_task):
     test_strokes = [My_stroke(os.path.join(set_path, f), 0, len(os.listdir(os.path.join(set_path, f))), 'Unknown') for f in os.listdir(set_path)]
     return train_strokes, validation_strokes, test_strokes
 
-def classification_task(working_folder, data_in = 'rgb', log=None, test_strokes_segmentation=None):
+def classification_task(working_folder, data_in = ['rgb', 's'], log=None, test_strokes_segmentation=None):
     '''
     Main of the classification task
     Perform also on the detection task when the videos for segmentation are provided
@@ -239,20 +328,33 @@ def classification_task(working_folder, data_in = 'rgb', log=None, test_strokes_
     print_and_log('\nClassification Task', log=log)
     # Initialization
     reset_training(1)
-    task_name = 'classificationTask'
-    task_path = os.path.join(working_folder, data_in, task_name)
+    task_name = 'classificationTask-' + data_in[0] + '-' + data_in[1] 
+    task_paths= []
+    for data in data_in:
+        task_paths.append(os.path.join(working_folder, data, task_name))
 
     # Split
-    train_strokes, validation_strokes, test_strokes = get_classification_strokes(task_path)
+    train_strokes_list, validation_strokes_list, test_strokes_list = [], [], []
+    for path in task_paths:
+        train_strokes, validation_strokes, test_strokes = get_classification_strokes(path)
+        train_strokes_list.append(train_strokes)
+        validation_strokes_list.append(validation_strokes)
+        test_strokes_list.append(test_strokes)
 
     # Model variables
     args = My_variables(working_folder, task_name)
     
-    ## Architecture with the output of the lenght of possible classes - (Unknown not counted)
-    model = make_architecture(args, len(list_of_strokes))
+    # Architecture with the output of the lenght of possible classes - (Unknown not counted)
+    # make two identical models
+    model = make_architecture(args, len(LIST_OF_STROKES))
 
     # Loaders
-    train_loader, validation_loader, test_loader = get_data_loaders(train_strokes, validation_strokes, test_strokes, args.size_data, args.batch_size, args.workers)
+    train_loader_list, validation_loader_list, test_loader_list = [], [], []
+    for i in enumerate(data_in):
+        train_loader, validation_loader, test_loader = get_data_loaders(train_strokes_list[i], validation_strokes_list[i], test_strokes_list[i], args.size_data, args.batch_size, args.workers)
+        train_loader_list.append(train_loader)
+        validation_loader_list.append(validation_loader)
+        test_loader_list.append(test_loader_list)
 
     # Training process
     if args.train_model:
@@ -260,8 +362,8 @@ def classification_task(working_folder, data_in = 'rgb', log=None, test_strokes_
     
     # Test process
     load_checkpoint(model, args)
-    test_model(model, args, test_loader, list_of_strokes=list_of_strokes)
-    test_prob_and_vote(model, args, test_strokes, list_of_strokes=list_of_strokes)
+    test_model(model, args, test_loader, list_of_strokes=LIST_OF_STROKES)
+    test_prob_and_vote(model, args, test_strokes, list_of_strokes=LIST_OF_STROKES)
     if test_strokes_segmentation is not None:
         test_videos_segmentation(model, args, test_strokes_segmentation, sum_stroke_scores=True)
     return 1
