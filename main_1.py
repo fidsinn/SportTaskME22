@@ -762,8 +762,8 @@ def detection_task(working_folder, stream_design, source_folder, log=None):
     # Initialization
     reset_training(1)
     task_name = 'detectionTask'
-    task_path = os.path.join(working_folder, task_name)
-    task_source = os.path.join(source_folder, task_name)
+    task_path = os.path.join(working_folder, stream_design, task_name)
+    task_source = os.path.join(source_folder, stream_design, task_name)
 
     # Split
     train_strokes, validation_strokes, test_strokes = get_lists_annotations(task_source, task_path)
@@ -850,9 +850,9 @@ if __name__ == "__main__":
     # Prepare work tree (respect levels for correct extraction of the frames)
     # make_work_tree(working_folder, source_folder, args.stream_design, frame_width=320, log=log)
     create_working_tree(working_folder, source_folder, frame_width=320, log=log)
-
+    
     if args.test_include == 'test':
-        test_include=get_videos_list(os.path.join(working_folder, 'detectionTask', 'test'))
+        test_include=get_videos_list(os.path.join(working_folder, args.stream_design, 'detectionTask', 'test'))
     elif args.test_include == 'notest':
         test_include=None
 
