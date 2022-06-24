@@ -1,4 +1,7 @@
 #!/bin/bash -l 
+
+### Copy this script to your home dir and change the working paths acordingly
+
 #SBATCH --ntasks=1
 #SBATCH --partition=clara-job
 #SBATCH --gres=gpu:v100:1
