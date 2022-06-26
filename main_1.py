@@ -8,6 +8,7 @@ import datetime
 import os
 import platform
 import time
+import datetime
 import torch
 import xml.etree.ElementTree as ET
 import numpy as np
@@ -826,6 +827,7 @@ if __name__ == "__main__":
     
     # Chrono
     start_time = time.time()
+    print('Start time: ', datetime.datetime.now().strftime('%d/%m/%Y %H:%M:%S'))
 
     print('Running Modeling-Task with args: task:{} | stream_design:{} | test_include:{}'.format(args.task, args.stream_design, args.test_include))
 
@@ -849,7 +851,7 @@ if __name__ == "__main__":
     
     # Prepare work tree (respect levels for correct extraction of the frames)
     # make_work_tree(working_folder, source_folder, args.stream_design, frame_width=320, log=log)
-    create_working_tree(working_folder, source_folder, frame_width=320, log=log)
+    create_working_tree(working_folder, source_folder, args.stream_design, frame_width=320, log=log)
     
     if args.test_include == 'test':
         test_include=get_videos_list(os.path.join(working_folder, args.stream_design, 'detectionTask', 'test'))

@@ -159,30 +159,52 @@ def create_folders_if_not_exist(folder_path_list):
 
 
 
-# creare a working tree with skeleton, rgb and skeleton + rgb frames
+# create a working tree with skeleton, rgb and skeleton + rgb frames
 # working_folder/
 #   s/...
 #   rgb/...
 #   srgb/...
-def create_working_tree(working_folder, source_folder, frame_width=320, log=None):
+def create_working_tree(working_folder, source_folder, stream_design, frame_width=320, log=None):
     # Chrono
     start_time = time.time()
     batch_size = 500
     # Get all the videos and extract the RGB frames in the working_folder directory.
-    list_of_videos = [f for f in getListOfFiles(os.path.join(source_folder)) if f.endswith('.mp4') and 's_' not in f ]
+    
+    list_of_videos = [f for f in getListOfFiles(os.path.join(source_folder)) if f.endswith('.mp4') and 's_' not in f and 'srgb_' not in f]
+    # if stream_design == 'rgb':
+    #    list_of_videos = [f for f in getListOfFiles(os.path.join(source_folder)) if ('s_' not in f and 'srgb_' not in f) or 'test' in f and f.endswith('.mp4') and '.' not in f]
+    # elif stream_design == 's':
+    #    list_of_videos = [f for f in getListOfFiles(os.path.join(source_folder)) if 's_' in f or 'test' in f and f.endswith('.mp4') and '.' not in f]
+    # elif stream_design == 'srgb':
+    #    list_of_videos = [f for f in getListOfFiles(os.path.join(source_folder)) if 'srgb_' in f or 'test' in f and f.endswith('.mp4') and '.' not in f]
 
     # init model for human detection
     # init once to save time
     model_det, model_pose = init_mmpose()
     
     for idx, video_path in enumerate(list_of_videos):
+        if stream_design == 'rgb':
+            pass
+        elif stream_design == 's':
+            video_path = video_path.replace('s_','')
+        elif stream_design == 'srgb':
+            video_path = video_path.replace('srgb_','')
+
         progress_bar(idx, len(list_of_videos), 'Frame + Pose extraction of:\n%s\n' % (video_path))
 
         frames_path_s = os.path.join(working_folder + '/s/', '/'.join(os.path.splitext(video_path)[0].split('/')[1:]))
         frames_path_srgb = os.path.join(working_folder + '/srgb/', '/'.join(os.path.splitext(video_path)[0].split('/')[1:]))
         frames_path_rgb = os.path.join(working_folder + '/rgb/', '/'.join(os.path.splitext(video_path)[0].split('/')[1:]))
+        
+        if stream_design == 'rgb':
+            fp = frames_path_rgb
+        elif stream_design == 's':
+            fp = frames_path_s
+        elif stream_design == 'srgb':
+            fp = frames_path_srgb
 
-        if not os.path.exists(frames_path_rgb):
+        #if not os.path.exists(frames_path_rgb):
+        if not os.path.exists(fp):
             
             create_folders_if_not_exist([frames_path_rgb, frames_path_s, frames_path_srgb])
             frame_extractor(video_path, 1080, frames_path_rgb)
