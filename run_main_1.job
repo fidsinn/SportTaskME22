@@ -5,6 +5,7 @@
 #SBATCH --ntasks=1
 #SBATCH --partition=clara-job
 #SBATCH --gres=gpu:v100:1
+#SBATCH --time=72:00:00
 #SBATCH --mem-per-gpu=5140
 #SBATCH --job-name=Sporttaskme22
 #SBATCH -o GIT/SportTaskME22/working_folder/slurm_logs/R-%x.%j.out

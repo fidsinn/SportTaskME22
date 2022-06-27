@@ -161,7 +161,7 @@ def apply_augmentation(data, zoom, R_matrix, flip):
 
 
 #  get data and aplay some augmentaion if specified
-
+#  TODO: modify here for two differet data types in loader
 def get_data(data_path, begin, end, size_data, augmentation):
     frame_data = []
     if augmentation:

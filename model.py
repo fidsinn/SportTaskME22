@@ -288,6 +288,44 @@ class CCNAttentionNetV1(nn.Module):
         return self.final(features)
 
 
+class CCNAttentionNet_Stream(nn.Module):
+    def __init__(self, size_data, n_classes, in_dim=3, filters=[8,16,32,64,128,256], cuda=True):
+        super(CCNAttentionNet_Stream, self).__init__()
+
+        layers = []
+        for idx, out_dim in enumerate(filters):
+            # First layer, no diminution of dimension on temporal domain, double
+            if idx == 0:
+                pool_size = [2,2,1]
+                pool_stride = [2,2,1]
+            else:
+                pool_size = [2,2,2]
+                pool_stride = [2,2,2]
+            layers.append(BlockConvReluPool3D(in_dim, out_dim, cuda=cuda, pool_size=pool_size, pool_stride=pool_stride))
+            size_data //= pool_stride
+            in_dim = out_dim
+            # No attention mechanism on the two last layers (min dim = 2 in this configuration) - (W,H,T)=(5,2,3) 
+            if idx>=len(filters)-2:
+                layers.append(AttentionModule3D(in_dim, in_dim, size_data, np.ceil(size_data/2), np.ceil(size_data/4), cuda=cuda))
+        self.sequential = nn.Sequential(*layers)
+        # (W,H,T)=(5,2,3) - lenght features = 7680
+        self.linear1 = nn.Linear(size_data[0]*size_data[1]*size_data[2]*in_dim, size_data[0]*size_data[1]*size_data[2]*in_dim//4)
+        self.activation = nn.ReLU()
+
+        self.linear2 = nn.Linear(size_data[0]*size_data[1]*size_data[2]*in_dim//4, n_classes)
+
+        ## Use GPU
+        if cuda:
+            self.cuda()
+
+    def forward(self, features):
+        features = self.sequential(features)
+        features = features.view(-1, flatten_features(features))
+        features = self.activation(self.linear1(features))
+        features = self.linear2(features)
+        return features
+
+
 
 class CCNAttentionNetV2(nn.Module):
     def __init__(self, size_data, n_classes, in_dim=3, filters=[32,64,128,256,512], cuda=True):
@@ -340,8 +378,10 @@ class CCNAttentionNet_TwoStream(nn.Module):
     def __init__(self, size_data, n_classes, in_dim=3, filters=[8,16,32,64,128,256], cuda=True):
         super(CCNAttentionNet_TwoStream, self).__init__()
 
-        self.stream_one = CCNAttentionNetV1(size_data, n_classes)
-        self.stream_two = CCNAttentionNetV1(size_data, n_classes)
+        self.stream_one = CCNAttentionNet_Stream(size_data, n_classes)
+        self.stream_two = CCNAttentionNet_Stream(size_data, n_classes)
+
+        self.final = nn.Softmax(1)
         ## Use GPU
         if cuda:
             self.cuda()
@@ -349,4 +389,4 @@ class CCNAttentionNet_TwoStream(nn.Module):
     def forward(self, features_s1, features_s2):
         s1_out = self.stream_one(features_s1)
         s2_out = self.stream_two(features_s2)
-        return s1_out + s2_out
+        return self.final(s1_out + s2_out)
