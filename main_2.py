@@ -6,10 +6,19 @@ import torch.optim as optim
 from torch.utils.data import Dataset, DataLoader
 from torch.autograd import Variable
 import json
+import xml.etree.ElementTree as ET
 
 from utils import *
 from model import *
 from init_data import create_working_tree
+
+print('Python version : ', platform.python_version())
+print('OpenCV version  : ', cv2.__version__)
+print('Torch version : ', torch.__version__)
+# Opencv use several cpus by default for simple operation. Using only one allows loading data in parallel much faster
+cv2.setNumThreads(0)
+print('Nb of threads for OpenCV : ', cv2.getNumThreads())
+
 
 
 # Classes
@@ -18,7 +27,7 @@ from init_data import create_working_tree
 Model variables
 '''
 class My_variables():
-    def __init__(self, working_path, task_name, size_data=[320,180,96], model_load='2022-06-16_13-10-40', cuda=True, batch_size=10, workers=10, epochs=2000, lr=0.0001, nesterov=True, weight_decay=0.005, momentum=0.5):
+    def __init__(self, working_path, task_name, data_in = ['rgb', 's'], size_data=[320,180,96], model_load=None, cuda=True, batch_size=10, workers=1, epochs=2000, lr=0.0001, nesterov=True, weight_decay=0.005, momentum=0.5):
         self.size_data = np.array(size_data)
         self.cuda = cuda
         self.workers = workers
@@ -30,8 +39,9 @@ class My_variables():
         self.nesterov = nesterov
         self.weight_decay = weight_decay
         self.momentum = momentum
+        self.data_in = data_in 
         if model_load is None:
-            self.model_name = os.path.join(working_path, 'Models', task_name, '%s' % (datetime.datetime.now().strftime('%Y-%m-%d_%H-%M-%S')))
+            self.model_name = os.path.join(working_path, 'Models', task_name + '_' + data_in[0] + '-' + data_in[1], '%s' % (datetime.datetime.now().strftime('%Y-%m-%d_%H-%M-%S')))
             self.train_model = True
         else:
             self.model_name = os.path.join(working_path, 'Models', task_name, model_load)
@@ -70,18 +80,18 @@ class My_stroke:
 My_dataset class which uses My_stroke class to be used in the data loader
 '''
 class My_dataset(Dataset):
-    def __init__(self, dataset_list, size_data, data_type, augmentation=False):
-        self.dataset_list = dataset_list
+    def __init__(self, dataset_list, size_data, augmentation=False):
+        self.dataset_list_1 = dataset_list[0]
+        self.dataset_list_2 = dataset_list[1]
         self.size_data = size_data
         self.augmentation = augmentation
-        self.data_type = data_type
 
     def __len__(self):
-        return len(self.dataset_list)
+        return len(self.dataset_list_1)
 
     def __getitem__(self, idx):
-        frames = get_data(self.dataset_list[idx].video_path, self.dataset_list[idx].begin, self.dataset_list[idx].end, self.size_data, self.augmentation)
-        sample = {'data_type': torch.FloatTensor(frames), 'label' : self.dataset_list[idx].move, 'my_stroke' : {'video_path':self.dataset_list[idx].video_path, 'begin':self.dataset_list[idx].begin, 'end':self.dataset_list[idx].end}}
+        frames_1, frames_2 = get_data(self.dataset_list_1[idx], self.dataset_list_2[idx], self.size_data, self.augmentation)
+        sample = {'stream_1': torch.FloatTensor(frames_1), 'stream_2': torch.FloatTensor(frames_2), 'label' : self.dataset_list_1[idx].move, 'my_stroke' : {'video_path':self.dataset_list_1[idx].video_path, 'begin':self.dataset_list_1[idx].begin, 'end':self.dataset_list_1[idx].end}}
         return sample
 
 
@@ -161,31 +171,42 @@ def apply_augmentation(data, zoom, R_matrix, flip):
 
 
 #  get data and aplay some augmentaion if specified
-#  TODO: modify here for two differet data types in loader
-def get_data(data_path, begin, end, size_data, augmentation):
-    frame_data = []
+def get_data(data_1, data_2, size_data, augmentation):
+    frame_data_1 = []
+    frame_data_2 = []
+    begin = data_1.begin
+    end = data_1.end
     if augmentation:
         angle, zoom, tx, ty, flip, begin = get_augmentation_parameters(begin, end, size_data)
         R_matrix = cv2.getRotationMatrix2D((size_data[0]//2-tx, size_data[1]//2-ty), angle, 1)
     else:
         angle, zoom, tx, ty, flip, begin = 0, 1, 0, 0, 0, max((begin+end-size_data[2])//2,0)
     
-    max_frame_number = len(os.listdir(data_path))-1
+    max_frame_number = len(os.listdir(data_1.video_path))-1
 
     for frame_number in range(begin, begin + size_data[2]):
         if frame_number > max_frame_number:
             frame_number = max_frame_number
         try:
-            frame = cv2.imread(os.path.join(data_path, '%08d.png' % frame_number))
-            frame = cv2.resize(frame, (size_data[0], size_data[1])).astype(float) / 255
+            frame_1 = cv2.imread(os.path.join(data_1.video_path, '%08d.png' % frame_number))
+            frame_1 = cv2.resize(frame_1, (size_data[0], size_data[1])).astype(float) / 255
+
+
+            frame_2 = cv2.imread(os.path.join(data_2.video_path, '%08d.png' % frame_number))
+            frame_2 = cv2.resize(frame_2, (size_data[0], size_data[1])).astype(float) / 255
+
+
             if augmentation:
-                frame = apply_augmentation(frame, zoom, R_matrix, flip)
+                frame_1 = apply_augmentation(frame_1, zoom, R_matrix, flip)
+                frame_2 = apply_augmentation(frame_2, zoom, R_matrix, flip)
         except:
-            raise ValueError('Problem with %s begin %d size %s' % (os.path.join(data_path, '%08d.png' % frame_number), begin, str(size_data)))
-        frame_data.append(cv2.split(frame))
+            raise ValueError('Problem with %s or %s begin %d size %s' % (os.path.join(data_1.video_path, '%08d.png' % frame_number),os.path.join(data_2.video_path, '%08d.png' % frame_number), begin, str(size_data)))
+        frame_data_1.append(cv2.split(frame_1))
+        frame_data_2.append(cv2.split(frame_2))
     # To match size_data variable, transposition is needed. From (T,C,H,W) to (C,W,H,T).
-    frame_data = np.transpose(frame_data, (1, 3, 2, 0))
-    return frame_data
+    frame_data_1 = np.transpose(frame_data_1, (1, 3, 2, 0))
+    frame_data_2 = np.transpose(frame_data_2, (1, 3, 2, 0))
+    return frame_data_1, frame_data_2
 
 
 
@@ -193,11 +214,11 @@ def get_data(data_path, begin, end, size_data, augmentation):
 '''
 Build dataloader from list of strokes
 '''
-def get_data_loaders(train_strokes, validation_strokes, test_strokes, size_data, batch_size, workers, data_type):
+def get_data_loaders(train_strokes, validation_strokes, test_strokes, size_data, batch_size, workers):
     # Build Dataset
-    train_set = My_dataset(train_strokes, size_data, data_type)
-    validation_set = My_dataset(validation_strokes, size_data, data_type)
-    test_set = My_dataset(test_strokes, size_data, data_type)
+    train_set = My_dataset(train_strokes, size_data)
+    validation_set = My_dataset(validation_strokes, size_data)
+    test_set = My_dataset(test_strokes, size_data)
 
     # Loaders of the Datasets
     train_loader = DataLoader(train_set, batch_size=batch_size, num_workers=workers, shuffle=True)
@@ -218,6 +239,32 @@ def make_architecture(args, output_size):
     if args.cuda:
         model.cuda()
     return model
+
+def save_checkpoint(args, model, optimizer, epoch, val_loss):
+    torch.save({'epoch': epoch,
+        'model_state_dict': model.state_dict(),
+        'optimizer_state_dict': optimizer.state_dict(),
+        'val_loss': val_loss}, os.path.join(args.model_name, 'checkpoint.pth'))
+    print_and_log('Model %s saved' % (args.model_name), log=args.log)
+    return 1
+
+def load_checkpoint(model, args, optimizer=None):
+    checkpoint = torch.load(os.path.join(args.model_name, 'checkpoint.pth'))
+    model.load_state_dict(checkpoint['model_state_dict']) #, map_location=lambda storage, loc: storage
+    # model.load_state_dict(checkpoint['model_state_dict'])
+    if optimizer is not None:
+        optimizer.load_state_dict(checkpoint['optimizer_state_dict'])
+    # epoch = checkpoint['epoch']
+    # val_loss = checkpoint['val_loss']
+    print_and_log('Model %s loaded' % (args.model_name), log=args.log)
+    return 1
+
+def change_lr(optimizer, args, lr):
+    for param_group in optimizer.param_groups:
+        param_group['lr'] = lr
+        args.lr = lr
+        print_and_log('Learning rate changed to %g' % lr, log=args.log)
+
 
 '''
 Training is split in train epoch and validation epoch and produce a plot
@@ -287,13 +334,14 @@ def train_epoch(epoch, args, model, data_loader, optimizer, criterion):
 
     for batch_idx, batch in enumerate(data_loader):
         # Get batch tensor
-        rgb, label = batch['rgb'], batch['label']
+        stream_1, stream_2, label = batch['stream_1'], batch['stream_2'], batch['label']
 
-        rgb = Variable(rgb.type(args.dtype))
+        stream_1 = Variable(stream_1.type(args.dtype))
+        stream_2 = Variable(stream_2.type(args.dtype))
         label = Variable(label.type(args.dtype).long())
 
         optimizer.zero_grad()
-        output = model(rgb)
+        output = model(stream_1, stream_2)
         loss = criterion(output, label)
         loss.backward()
         optimizer.step()
@@ -307,6 +355,126 @@ def train_epoch(epoch, args, model, data_loader, optimizer, criterion):
     return aLoss, Acc/N
 
 
+'''
+Validation of the model in one epoch
+'''
+def validation_epoch(epoch, args, model, data_loader, criterion):
+    with torch.no_grad():
+        model.eval() # Set model to evaluation mode - needed for batchnorm
+        begin_time = time.time()
+        pid = os.getpid()
+        N = len(data_loader.dataset)
+        _loss = 0
+        _acc = 0
+
+        for batch_idx, batch in enumerate(data_loader):
+            progress_bar(batch_idx*args.batch_size, N, '%d - Validation' % (pid))
+            
+            stream_1, stream_2, label = batch['stream_1'], batch['stream_2'], batch['label']
+            stream_1 = Variable(stream_1.type(args.dtype))
+            stream_2 = Variable(stream_2.type(args.dtype))
+            label = Variable(label.type(args.dtype).long())
+
+            output = model(stream_1, stream_2)
+            _loss += criterion(output, label).item()
+            _acc += output.data.max(1)[1].eq(label.data).cpu().sum().numpy()
+
+        _loss /= N
+        progress_bar(N, N, 'Validation - Loss = %.5g - Accuracy = %.3g (%d/%d) - Time = %ds' % (_loss, _acc/N, _acc, N, time.time() - begin_time), 1, log=args.log)
+        return _loss, _acc/N
+
+'''
+Test Process
+'''
+def store_xml_data(my_stroke_list, predicted, xml_files, list_of_strokes=None):
+    '''
+    This function stores data to xml files from the list of stroke with predicted class.
+    For detection it is saved when index predicted to 1
+    '''
+    for video_path, begin, end, prediction_index in zip(my_stroke_list['video_path'], my_stroke_list['begin'].tolist(), my_stroke_list['end'].tolist(), predicted):
+        video_name = video_path.split('/')[-1]
+        if list_of_strokes is None:
+            if video_name not in xml_files:
+                xml_files[video_name] = ET.Element('video')
+            if prediction_index:
+                stroke_xml = ET.SubElement(xml_files[video_name], 'action')
+                stroke_xml.set('begin', str(begin))
+                stroke_xml.set('end', str(end))
+        else:
+            if 'test' not in xml_files:
+                xml_files['test'] = ET.Element('videos')
+            stroke_xml = ET.SubElement(xml_files['test'], 'video')
+            stroke_xml.set('name', '%s.mp4' % (video_name))
+            stroke_xml.set('class', list_of_strokes[prediction_index])
+
+def store_stroke_to_xml(my_stroke_list, xml_files, list_of_strokes=None):
+    '''
+    This function stores strokes in xml files.
+    '''
+    for my_stroke in my_stroke_list:
+        video_name = my_stroke.video_path.split('/')[-1]
+        if list_of_strokes is None:
+            if video_name not in xml_files:
+                xml_files[video_name] = ET.Element('video')
+            if my_stroke.move:
+                stroke_xml = ET.SubElement(xml_files[video_name], 'action')
+                stroke_xml.set('begin', str(my_stroke.begin))
+                stroke_xml.set('end', str(my_stroke.end))
+        else:
+            if 'test' not in xml_files:
+                xml_files['test'] = ET.Element('videos')
+            stroke_xml = ET.SubElement(xml_files['test'], 'video')
+            stroke_xml.set('name', '%s.mp4' % (video_name))
+            stroke_xml.set('class', list_of_strokes[my_stroke.move])
+
+'''
+Save the predictions in xml files
+'''
+def save_xml_data(xml_files, path_xml_save):
+    for xml_name in xml_files:
+        xml_file = open('%s.xml' % os.path.join(path_xml_save, xml_name), 'wb')
+        xml_file.write(ET.tostring(xml_files[xml_name]))
+        xml_file.close()
+
+'''
+Inference on test set
+'''
+def test_model(model, args, data_loader, list_of_strokes=None):
+    with torch.no_grad():
+        model.eval() # Set model to evaluation mode - needed for batchnorm
+        xml_files = {}
+        path_xml_save = os.path.join(args.model_name, 'xml_test')
+        os.mkdir(path_xml_save)
+        N = len(data_loader.dataset)
+        
+        for batch_idx, batch in enumerate(data_loader):
+            # Get batch tensor
+            stream_1, stream_2, my_stroke_list = batch['stream_1'], batch['stream_2'], batch['my_stroke']
+            progress_bar(args.batch_size*batch_idx, N, 'Testing')
+            stream_1 = Variable(stream_1.type(args.dtype))
+            stream_2 = Variable(stream_2.type(args.dtype))
+            output = model(stream_1, stream_2)
+            _, predicted = torch.max(output.detach(), 1)
+            store_xml_data(my_stroke_list, predicted, xml_files, list_of_strokes=list_of_strokes)
+
+        progress_bar(N, N, 'Test done', 1, log=args.log)
+        save_xml_data(xml_files, path_xml_save)
+
+
+'''
+Detection task
+'''
+def get_videos_list(data_folder):
+    '''
+    Get list of videos and transform it to strokes for segmentation purpose
+    '''
+    video_list = []
+    for video in os.listdir(data_folder):
+        video_path = os.path.join(data_folder, video)
+        video_list.append(My_stroke(video_path, 0, len(os.listdir(video_path)), 0))
+    return video_list
+
+
 # Classification Task
 # Get Stroke labels from the directory structure and save it in the My_stroke class
 def get_classification_strokes(working_folder_task):
@@ -318,6 +486,12 @@ def get_classification_strokes(working_folder_task):
         for action_class in os.listdir(set_path) for f in os.listdir(os.path.join(set_path, action_class))]
     set_path = os.path.join(working_folder_task, 'test')
     test_strokes = [My_stroke(os.path.join(set_path, f), 0, len(os.listdir(os.path.join(set_path, f))), 'Unknown') for f in os.listdir(set_path)]
+    
+    # they need to be sorted as list dir gets them in different orderes
+    train_strokes.sort(key=lambda x: x.video_path, reverse=True)
+    validation_strokes.sort(key=lambda x: x.video_path, reverse=True)
+    test_strokes.sort(key=lambda x: x.video_path, reverse=True)
+
     return train_strokes, validation_strokes, test_strokes
 
 def classification_task(working_folder, data_in = ['rgb', 's'], log=None, test_strokes_segmentation=None):
@@ -328,7 +502,7 @@ def classification_task(working_folder, data_in = ['rgb', 's'], log=None, test_s
     print_and_log('\nClassification Task', log=log)
     # Initialization
     reset_training(1)
-    task_name = 'classificationTask-' + data_in[0] + '-' + data_in[1] 
+    task_name = 'classificationTask' 
     task_paths= []
     for data in data_in:
         task_paths.append(os.path.join(working_folder, data, task_name))
@@ -349,12 +523,7 @@ def classification_task(working_folder, data_in = ['rgb', 's'], log=None, test_s
     model = make_architecture(args, len(LIST_OF_STROKES))
 
     # Loaders
-    train_loader_list, validation_loader_list, test_loader_list = [], [], []
-    for i in enumerate(data_in):
-        train_loader, validation_loader, test_loader = get_data_loaders(train_strokes_list[i], validation_strokes_list[i], test_strokes_list[i], args.size_data, args.batch_size, args.workers)
-        train_loader_list.append(train_loader)
-        validation_loader_list.append(validation_loader)
-        test_loader_list.append(test_loader_list)
+    train_loader, validation_loader, test_loader = get_data_loaders(train_strokes_list, validation_strokes_list, test_strokes_list, args.size_data, args.batch_size, args.workers)
 
     # Training process
     if args.train_model:
@@ -362,10 +531,11 @@ def classification_task(working_folder, data_in = ['rgb', 's'], log=None, test_s
     
     # Test process
     load_checkpoint(model, args)
-    test_model(model, args, test_loader, list_of_strokes=LIST_OF_STROKES)
-    test_prob_and_vote(model, args, test_strokes, list_of_strokes=LIST_OF_STROKES)
-    if test_strokes_segmentation is not None:
-        test_videos_segmentation(model, args, test_strokes_segmentation, sum_stroke_scores=True)
+    # TODO make testing stuff work
+    # test_model(model, args, test_loader, list_of_strokes=LIST_OF_STROKES)
+    # test_prob_and_vote(model, args, test_strokes, list_of_strokes=LIST_OF_STROKES)
+    # if test_strokes_segmentation is not None:
+    #     test_videos_segmentation(model, args, test_strokes_segmentation, sum_stroke_scores=True)
     return 1
 
 
@@ -393,12 +563,12 @@ if __name__ == "__main__":
     log = setup_logger('my_log', os.path.join(log_folder, '%s.log' % (datetime.datetime.now().strftime('%Y-%m-%d_%H-%M-%S'))))
     
     # Prepare work tree (respect levels for correct extraction of the frames)
-    create_working_tree(working_folder, source_folder, frame_width=320, log=log)
+    # create_working_tree(working_folder, source_folder, frame_width=320, log=log)
     print_and_log('Working tree created in %ds' % (time.time()-start_time), log=log)
 
 
     # Tasks
     # detection_task(working_folder, source_folder, log=log)
-    # classification_task(working_folder, log=log, test_strokes_segmentation=get_videos_list(os.path.join(working_folder, 'detectionTask', 'test')))
+    classification_task(working_folder, log=log, test_strokes_segmentation=get_videos_list(os.path.join(working_folder, 'rgb', 'detectionTask', 'test')))
     
     print_and_log('All Done in %ds' % (time.time()-start_time), log=log)
