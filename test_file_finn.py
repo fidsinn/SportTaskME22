@@ -123,8 +123,8 @@ def timetime():
 #weird_for_loop()
 #print(concatting())
 #remove_wrong_paths()
-rootdir = 'GIT/SportTaskME22/working_folder/s' #dann nochmal für /rgb ausführen
+rootdir = 'working_folder/rgb/classificationTask/train' #dann nochmal für /rgb ausführen
 #listdirs(rootdir)
 #list_directs(rootdir)
-#print(fast_scandir(rootdir))
-timetime()
+print(fast_scandir(rootdir))
+#timetime()
