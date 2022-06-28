@@ -27,7 +27,7 @@ print('Nb of threads for OpenCV : ', cv2.getNumThreads())
 Model variables
 '''
 class My_variables():
-    def __init__(self, working_path, task_name, data_in = ['rgb', 's'], size_data=[320,180,96], model_load=None, cuda=True, batch_size=10, workers=1, epochs=2000, lr=0.0001, nesterov=True, weight_decay=0.005, momentum=0.5):
+    def __init__(self, working_path, task_name, data_in = ['rgb', 's'], size_data=[320,180,96], model_load=None, cuda=True, batch_size=10, workers=5, epochs=2000, lr=0.0001, nesterov=True, weight_decay=0.005, momentum=0.5):
         self.size_data = np.array(size_data)
         self.cuda = cuda
         self.workers = workers
