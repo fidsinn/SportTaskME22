@@ -460,21 +460,6 @@ def test_model(model, args, data_loader, list_of_strokes=None):
         progress_bar(N, N, 'Test done', 1, log=args.log)
         save_xml_data(xml_files, path_xml_save)
 
-
-'''
-Detection task
-'''
-def get_videos_list(data_folder):
-    '''
-    Get list of videos and transform it to strokes for segmentation purpose
-    '''
-    video_list = []
-    for video in os.listdir(data_folder):
-        video_path = os.path.join(data_folder, video)
-        video_list.append(My_stroke(video_path, 0, len(os.listdir(video_path)), 0))
-    return video_list
-
-
 # Classification Task
 # Get Stroke labels from the directory structure and save it in the My_stroke class
 def get_classification_strokes(working_folder_task):
@@ -538,8 +523,55 @@ def classification_task(working_folder, data_in = ['rgb', 's'], log=None, test_s
     #     test_videos_segmentation(model, args, test_strokes_segmentation, sum_stroke_scores=True)
     return 1
 
+'''
+Detection task
+'''
+def detection_task(working_folder, source_folder, data_in, log=None):
+    '''
+    Main of the detection task
+    Return test segmentation video to try with the classification model
+    '''
+    print_and_log('\nDetection Task', log=log)
+    # Initialization
+    reset_training(1)
+    task_name = 'detectionTask'
+    task_paths = []
+
+    task_source = os.path.join(source_folder, task_name)
+    for data in data_in:
+        task_path = os.path.join(working_folder, data, task_name)
+        task_paths.append(task_path)
+
+    # Split
+    train_strokes_list, validation_strokes_list, test_strokes_list = [], [], []
+    for path in task_paths:
+        train_strokes, validation_strokes, test_strokes = get_lists_annotations(task_source, path)
+        train_strokes_list.append(train_strokes)
+        validation_strokes_list.append()
+        test_strokes_list.append(test_strokes)
 
 
+    # Model variables
+    args = my_variables(working_folder, stream_design, task_name)
+
+    # Architecture with the output of the lenght of possible classes - Positive and Negative
+    model = make_architecture(args, 2)
+
+    # Loaders
+    train_loader, validation_loader, test_loader = get_data_loaders(train_strokes, validation_strokes, test_strokes, args.size_data, args.batch_size, args.workers)
+
+    # Training process
+    if args.train_model:
+        train_model(model, args, train_loader, validation_loader)
+    
+    # Test process
+    load_checkpoint(model, args)
+    test_model(model, args, test_loader)
+    test_prob_and_vote(model, args, test_strokes)
+    list_of_test_videos = get_videos_list(os.path.join(task_path, 'test'))
+    test_videos_segmentation(model, args, list_of_test_videos)
+    return 1
+    
 if __name__ == "__main__":
     # Chrono
     start_time = time.time()
@@ -552,9 +584,6 @@ if __name__ == "__main__":
     source_folder = 'data'
 
     # Folder to save work
-    # s      -> skeleton stream
-    # rgb    -> rgb stream
-    # srgb   -> srgb stream
     working_folder = 'working_folder'
     
     # Log file
