@@ -526,6 +526,44 @@ def classification_task(working_folder, data_in = ['rgb', 's'], log=None, test_s
 '''
 Detection task
 '''
+def get_videos_list(data_folder):
+    '''
+    Get list of videos and transform it to strokes for segmentation purpose
+    '''
+    video_list = []
+    for video in os.listdir(data_folder):
+        video_path = os.path.join(data_folder, video)
+        video_list.append(My_stroke(video_path, 0, len(os.listdir(video_path)), 0))
+    return video_list
+
+def get_annotations(xml_path, data_folder):
+    '''
+    Get annotations from xml files located in one folder and produce a list of My_stroke
+    '''
+    xml_list = [os.path.join(xml_path, f) for f in os.listdir(xml_path) if os.path.isfile(os.path.join(xml_path, f)) and f.split('.')[-1]=='xml']
+    strokes_list = []
+    for xml_file in xml_list:
+        tree = ET.parse(xml_file)
+        root = tree.getroot()
+        video_path = os.path.join(data_folder, xml_file.split('/')[-1].split('.')[0])
+        for action in root:
+            strokes_list.append(My_stroke(video_path, int(action.get('begin')), int(action.get('end')), 1))
+        # Case of the test set in segmentation task - build proposals of size 150
+        if len(root)==0: 
+            for begin in range(0,len(os.listdir(video_path))-150,150):
+                strokes_list.append(My_stroke(video_path, begin, begin+150, 0))
+    build_negative_strokes(strokes_list)
+    return strokes_list
+
+def get_lists_annotations(task_source, task_path):
+    '''
+    Get the split of annotation and construct negative samples
+    '''
+    train_strokes = get_annotations(os.path.join(task_source, 'train'), os.path.join(task_path, 'train'))
+    validation_strokes = get_annotations(os.path.join(task_source, 'validation'), os.path.join(task_path, 'validation'))
+    test_strokes = get_annotations(os.path.join(task_source, 'test'), os.path.join(task_path, 'test'))
+    return train_strokes, validation_strokes, test_strokes
+
 def detection_task(working_folder, source_folder, data_in, log=None):
     '''
     Main of the detection task
@@ -558,7 +596,7 @@ def detection_task(working_folder, source_folder, data_in, log=None):
     model = make_architecture(args, 2)
 
     # Loaders
-    train_loader, validation_loader, test_loader = get_data_loaders(train_strokes, validation_strokes, test_strokes, args.size_data, args.batch_size, args.workers)
+    train_loader, validation_loader, test_loader = get_data_loaders(train_strokes_list, validation_strokes_list, test_strokes_list, args.size_data, args.batch_size, args.workers)
 
     # Training process
     if args.train_model:
@@ -566,8 +604,9 @@ def detection_task(working_folder, source_folder, data_in, log=None):
     
     # Test process
     load_checkpoint(model, args)
-    test_model(model, args, test_loader)
-    test_prob_and_vote(model, args, test_strokes)
+    # TODO
+    #test_model(model, args, test_loader)
+    #test_prob_and_vote(model, args, test_strokes)
     list_of_test_videos = get_videos_list(os.path.join(task_path, 'test'))
     test_videos_segmentation(model, args, list_of_test_videos)
     return 1

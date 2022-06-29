@@ -796,7 +796,7 @@ def detection_task(working_folder, source_folder, stream_design, log=None):
 def parse_args():
     parser = argparse.ArgumentParser(description='Parse arguments defining stream information')
 
-    parser.add_argument('--task','-t',default='cd',help='cd(classification and detection); c(classification); d(detection)')
+    parser.add_argument('--task','-t',default='dc',help='dc(detection and classification); d(detection); c(classification)')
     parser.add_argument('--stream_size','-sz',default='one',help='one(one-stream (input from stream_design-args)); two(two-stream (input from rgb and stream_design-args))')
     parser.add_argument('--model', '-m',default='v1',help='choose model (e.g. v1, v2,...)')
     parser.add_argument('--stream_design','-sd',default='rgb',help='rgb(base rgb); s(skeleton); srgb(skeleton rgb)')
@@ -815,7 +815,7 @@ if __name__ == "__main__":
     #args from terminal
     args = parse_args()
 
-    task_list = ['cd', 'c', 'd']
+    task_list = ['dc', 'c', 'd']
     stream_design_list = ['rgb', 's', 'srgb']
     test_include_list = ['test', 'notest']
 
@@ -866,13 +866,12 @@ if __name__ == "__main__":
         test_include=None
 
     # Tasks
-    if args.task=='cd':
+    if args.task=='dc':
         detection_task(working_folder, source_folder, args.stream_design, log=log)
-        classification_task(working_folder, args.stream_design, test_strokes_segmentation=test_include, log=log)
-    if args.task=='c':
         classification_task(working_folder, args.stream_design, test_strokes_segmentation=test_include, log=log)
     if args.task=='d':
         detection_task(working_folder, source_folder, args.stream_design, log=log)
-        pass
+    if args.task=='c':
+        classification_task(working_folder, args.stream_design, test_strokes_segmentation=test_include, log=log)
     
     print_and_log('All Done in %ds' % (time.time()-start_time), log=log)
