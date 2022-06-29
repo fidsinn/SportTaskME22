@@ -795,50 +795,40 @@ def detection_task(working_folder, source_folder, stream_design, log=None):
 
 def parse_args():
     parser = argparse.ArgumentParser(description='Parse arguments defining stream information')
-
-    parser.add_argument('--task','-t',default='dc',help='dc(detection and classification); d(detection); c(classification)')
-    parser.add_argument('--stream_size','-sz',default='one',help='one(one-stream (input from stream_design-args)); two(two-stream (input from rgb and stream_design-args))')
-    parser.add_argument('--model', '-m',default='v1',help='choose model (e.g. v1, v2,...)')
-    parser.add_argument('--stream_design','-sd',default='rgb',help='rgb(base rgb); s(skeleton); srgb(skeleton rgb)')
-    parser.add_argument('--test_include','-ti',default='rgb',help='rgb(include running test on rgb data); second(include running test on second stream data); notest(exclude running test)')
-    parser.add_argument('--log_include','-l',default='nolog',help='log(include writing log); nolog(exclude writing log)')
-    
+    parser.add_argument('--task','-t',default='dc',
+                        choices=['dc', 'd', 'c'],
+                        help='dc(detection and classification); d(detection); c(classification)')
+    #parser.add_argument('--stream_size','-sz',default='one',help='one(one-stream (input from stream_design-args)); two(two-stream (input from rgb and stream_design-args))')
+    parser.add_argument('--model', '-m',default='v1',
+                        help='choose model (e.g. v1, v2,...)')
+    parser.add_argument('--stream_design','-sd',default='rgb',
+                        choices=['rgb', 's', 'srgb'],
+                        help='rgb(base rgb); s(skeleton); srgb(skeleton rgb)')
+    parser.add_argument('--test_include','-ti',default='rgb',
+                        choices=['rgb', 's', 'srgb', 'notest'],
+                        help='rgb(include running test on rgb data); s(... on s data); srgb(... on srgb data); notest(exclude running test)')
+    parser.add_argument('--log_include','-li',default='nolog',
+                        choices=['log', 'nolog'],
+                        help='log(include writing log); nolog(exclude writing log)')
     args = parser.parse_args()
     return args
 
 if __name__ == "__main__":
-
     '''
-    Promt looks like this: python main_1.py <task> <stream_design> <test_include>
+    Promt looks like this: python main_1.py -t <task> -m <model> -sd <stream_design> -ti <test_include> -li <log_include>
     '''
-    
-    #args from terminal
-    args = parse_args()
-
-    task_list = ['dc', 'c', 'd']
-    stream_design_list = ['rgb', 's', 'srgb']
-    test_include_list = ['test', 'notest']
-
-    if args.task not in task_list:
-        print('Wrong \'task\'-input')
-        print(' -> break')
-        sys.exit()
-    if args.stream_design not in stream_design_list:
-        print('Wrong \'stream_design\'-input')
-        print(' -> break')
-        sys.exit()
-    if args.test_include not in test_include_list:
-        print('Wrong \'test_include\'-input')
-        print(' -> break')
-        sys.exit()
     
     # Chrono
     start_time = time.time()
+    print()
     print('Start time: ', datetime.datetime.now().strftime('%d/%m/%Y %H:%M:%S'))
 
-    print('Running Modeling-Task with args: task:{} | stream_design:{} | test_include:{}'.format(args.task, args.stream_design, args.test_include))
-
+    print('Running Modeling-Task with args: task:{}; model:{}; stream_design:{}; test_include:{}; log_include:{}'\
+        .format(args.task, args.model, args.stream_design, args.test_include, args.log_include))
+        
     print('Working GPU device:',torch.cuda.get_device_name(torch.cuda.current_device()))
+
+    print()
 
     # MediaEval Task source folder
     source_folder = 'data'
@@ -858,10 +848,13 @@ if __name__ == "__main__":
     # make_work_tree(working_folder, source_folder, args.stream_design, frame_width=320, log=log)
     create_working_tree(working_folder, source_folder, args.stream_design, frame_width=320, log=log)
     
+    #Included data for test
     if args.test_include == 'rgb':
         test_include=get_videos_list(os.path.join(working_folder, 'rgb', 'detectionTask', 'test'))
-    elif args.test_include == 'second':
-        test_include=get_videos_list(os.path.join(working_folder, args.stream_design, 'detectionTask', 'test'))
+    elif args.test_include == 's':
+        test_include=get_videos_list(os.path.join(working_folder, 's', 'detectionTask', 'test'))
+    elif args.test_include == 'srgb':
+        test_include=get_videos_list(os.path.join(working_folder, 'srgb', 'detectionTask', 'test'))
     elif args.test_include == 'notest':
         test_include=None
 
@@ -869,9 +862,9 @@ if __name__ == "__main__":
     if args.task=='dc':
         detection_task(working_folder, source_folder, args.stream_design, log=log)
         classification_task(working_folder, args.stream_design, test_strokes_segmentation=test_include, log=log)
-    if args.task=='d':
+    elif args.task=='d':
         detection_task(working_folder, source_folder, args.stream_design, log=log)
-    if args.task=='c':
+    elif args.task=='c':
         classification_task(working_folder, args.stream_design, test_strokes_segmentation=test_include, log=log)
     
     print_and_log('All Done in %ds' % (time.time()-start_time), log=log)

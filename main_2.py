@@ -27,7 +27,7 @@ print('Nb of threads for OpenCV : ', cv2.getNumThreads())
 Model variables
 '''
 class My_variables():
-    def __init__(self, working_path, task_name, data_in = ['rgb', 's'], size_data=[320,180,96], model_load=None, cuda=True, batch_size=10, workers=10, epochs=500, lr=0.0001, nesterov=True, weight_decay=0.005, momentum=0.5):
+    def __init__(self, working_path, data_in, task_name, size_data=[320,180,96], model_load=None, cuda=True, batch_size=10, workers=10, epochs=500, lr=0.0001, nesterov=True, weight_decay=0.005, momentum=0.5):
         self.size_data = np.array(size_data)
         self.cuda = cuda
         self.workers = workers
@@ -479,7 +479,7 @@ def get_classification_strokes(working_folder_task):
 
     return train_strokes, validation_strokes, test_strokes
 
-def classification_task(working_folder, data_in = ['rgb', 's'], log=None, test_strokes_segmentation=None):
+def classification_task(working_folder, data_in, test_strokes_segmentation, log):
     '''
     Main of the classification task
     Perform also on the detection task when the videos for segmentation are provided
@@ -501,7 +501,7 @@ def classification_task(working_folder, data_in = ['rgb', 's'], log=None, test_s
         test_strokes_list.append(test_strokes)
 
     # Model variables
-    args = My_variables(working_folder, task_name)
+    args = My_variables(working_folder, data_in, task_name)
     
     # Architecture with the output of the lenght of possible classes - (Unknown not counted)
     # make two identical models
@@ -576,6 +576,7 @@ def detection_task(working_folder, source_folder, data_in, log=None):
     task_paths = []
 
     task_source = os.path.join(source_folder, task_name)
+    print('  task_source:', task_source)
     for data in data_in:
         task_path = os.path.join(working_folder, data, task_name)
         task_paths.append(task_path)
@@ -587,10 +588,12 @@ def detection_task(working_folder, source_folder, data_in, log=None):
         train_strokes_list.append(train_strokes)
         validation_strokes_list.append()
         test_strokes_list.append(test_strokes)
+    print('  task_paths:', *task_path)
+    print()
 
 
     # Model variables
-    args = my_variables(working_folder, stream_design, task_name)
+    args = My_variables(working_folder, data_in, task_name)
 
     # Architecture with the output of the lenght of possible classes - Positive and Negative
     model = make_architecture(args, 2)
@@ -610,33 +613,88 @@ def detection_task(working_folder, source_folder, data_in, log=None):
     list_of_test_videos = get_videos_list(os.path.join(task_path, 'test'))
     test_videos_segmentation(model, args, list_of_test_videos)
     return 1
+
+    def parse_args():
+    parser = argparse.ArgumentParser(description='Parse arguments defining stream information')
+    parser.add_argument('--task','-t',default='dc',
+                        choices=['dc', 'd', 'c'],
+                        help='dc(detection and classification); d(detection); c(classification)')
+    parser.add_argument('--model', '-m',default='v1',
+                        help='choose model from model.py (e.g. v1, v2,...)')
+    parser.add_argument('--stream_design','-sd',default='s',
+                        choices=['s', 'srgb'],
+                        help='s(skeleton); srgb(skeleton+rgb)')
+    parser.add_argument('--test_include','-ti',default='rgb',
+                        choices=['rgb', 's', 'srgb', 'notest'],
+                        help='rgb(include running test on rgb data); s; srgb; notest')
+    parser.add_argument('--log_include','-li',default='nolog',
+                        choices=['log', 'nolog'],
+                        help='log(include writing log); nolog')
+    args = parser.parse_args()
+    return args
     
 if __name__ == "__main__":
+    '''
+    Promt looks like this: python main_1.py -t <task> -m <model> -sd <stream_design> -ti <test_include> -li <log_include>
+    '''
+
+    #args from terminal
+    args = parse_args()
+
     # Chrono
     start_time = time.time()
+    print()
+    print('Start time: ', datetime.datetime.now().strftime('%d/%m/%Y %H:%M:%S'))
+
+    print('Running Modeling-Task with args: task:{}; model:{}; stream_design:{}; test_include:{}; log_include:{}'\
+        .format(args.task, args.model, args.stream_design, args.test_include, args.log_include))
 
     print('Working GPU device:',torch.cuda.get_device_name(torch.cuda.current_device()))
 
-    # Mode s, srgb, rgb TODO: This will be kicked eventualy
+    print()
 
     # MediaEval Task source folder
     source_folder = 'data'
 
     # Folder to save work
     working_folder = 'working_folder'
+
+    #second stream design (besides rgb)
+    if args.stream_design == 's':
+        data_in = ['rgb', 's']
+    elif args.stream_design == 'srgb':
+        data_in = ['rgb', 'srgb']
     
     # Log file
     log_folder = os.path.join(working_folder, 'logs')
     os.makedirs(log_folder, exist_ok=True)
-    log = setup_logger('my_log', os.path.join(log_folder, '%s.log' % (datetime.datetime.now().strftime('%Y-%m-%d_%H-%M-%S'))))
-    
+    if args.log_include == 'log':
+        log = setup_logger('my_log', os.path.join(log_folder, '%s.log' % (datetime.datetime.now().strftime('%Y-%m-%d_%H-%M_{}-{}'.format(args.model, args.stream_design)))))
+    elif args.log_include == 'nolog':
+        log = None
+
+    #TODO: cant we uncomment that part? Because everything is preprocessed already. Think it would be cleaner for final submission
     # Prepare work tree (respect levels for correct extraction of the frames)
     # create_working_tree(working_folder, source_folder, frame_width=320, log=log)
     print_and_log('Working tree created in %ds' % (time.time()-start_time), log=log)
 
+    #Included data for test
+    if args.test_include == 'rgb':
+        test_include=get_videos_list(os.path.join(working_folder, 'rgb', 'detectionTask', 'test'))
+    elif args.test_include == 's':
+        test_include=get_videos_list(os.path.join(working_folder, 's', 'detectionTask', 'test'))
+    elif args.test_include == 'srgb':
+        test_include=get_videos_list(os.path.join(working_folder, 'srgb', 'detectionTask', 'test'))
+    elif args.test_include == 'notest':
+        test_include=None
 
     # Tasks
-    # detection_task(working_folder, source_folder, log=log)
-    classification_task(working_folder, log=log, test_strokes_segmentation=get_videos_list(os.path.join(working_folder, 'rgb', 'detectionTask', 'test')))
+    if args.task=='dc':
+        detection_task(working_folder, source_folder, data_in, log=log)
+        classification_task(working_folder, data_in, test_strokes_segmentation=test_include, log=log)
+    elif args.task=='d':
+        detection_task(working_folder, source_folder, data_in, log=log)
+    elif args.task=='c':
+        classification_task(working_folder, data_in, test_strokes_segmentation=test_include, log=log)
     
     print_and_log('All Done in %ds' % (time.time()-start_time), log=log)
