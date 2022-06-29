@@ -714,7 +714,6 @@ if __name__ == "__main__":
         detection_task(working_folder, source_folder, data_in, epochs, args.model_load, log=log)
         classification_task(working_folder, data_in, epochs, args.model_load, test_strokes_segmentation=test_include, log=log)
     elif args.task=='d':
-        pass
         detection_task(working_folder, source_folder, data_in, epochs, args.model_load, log=log)
     elif args.task=='c':
         classification_task(working_folder, data_in, epochs, args.model_load, test_strokes_segmentation=test_include, log=log)
