@@ -374,9 +374,9 @@ class CCNAttentionNetV2(nn.Module):
         features = self.linear2(features)
         return self.final(features)
 
-class CCNAttentionNet_TwoStream(nn.Module):
+class CCNAttentionNet_TwoStream_V1(nn.Module):
     def __init__(self, size_data, n_classes, in_dim=3, filters=[8,16,32,64,128,256], cuda=True):
-        super(CCNAttentionNet_TwoStream, self).__init__()
+        super(CCNAttentionNet_TwoStream_V1, self).__init__()
         
         # need to vopy value of size data as model chabges  it 
         self.stream_one = CCNAttentionNet_Stream(size_data.copy(), n_classes)

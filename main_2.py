@@ -12,6 +12,9 @@ from utils import *
 from model import *
 from init_data import create_working_tree
 
+import argparse
+import sys
+
 print('Python version : ', platform.python_version())
 print('OpenCV version  : ', cv2.__version__)
 print('Torch version : ', torch.__version__)
@@ -27,7 +30,7 @@ print('Nb of threads for OpenCV : ', cv2.getNumThreads())
 Model variables
 '''
 class My_variables():
-    def __init__(self, working_path, data_in, task_name, size_data=[320,180,96], model_load=None, cuda=True, batch_size=10, workers=10, epochs=500, lr=0.0001, nesterov=True, weight_decay=0.005, momentum=0.5):
+    def __init__(self, working_path, data_in, task_name, epochs, model_load, size_data=[320,180,96], cuda=True, batch_size=10, workers=10, lr=0.0001, nesterov=True, weight_decay=0.005, momentum=0.5):
         self.size_data = np.array(size_data)
         self.cuda = cuda
         self.workers = workers
@@ -44,7 +47,7 @@ class My_variables():
             self.model_name = os.path.join(working_path, 'Models', task_name + '_' + data_in[0] + '-' + data_in[1], '%s' % (datetime.datetime.now().strftime('%Y-%m-%d_%H-%M-%S')))
             self.train_model = True
         else:
-            self.model_name = os.path.join(working_path, 'Models', task_name, model_load)
+            self.model_name = os.path.join(working_path, 'Models', task_name + '_' + data_in[0] + '-' + data_in[1], model_load)
             self.train_model = False
         os.makedirs(self.model_name, exist_ok=True)
         if cuda:
@@ -129,6 +132,17 @@ LIST_OF_STROKES = [
     'Defensive Backhand Block',
     'Defensive Backhand Backspin']
 
+'''Infer Negative Samples from annotation betwen strokes when there are more than length_min frames'''
+def build_negative_strokes(stroke_list, length_min=200):
+    video_path = ''
+    for stroke in stroke_list.copy():
+        if stroke.video_path != video_path:
+            video_path = stroke.video_path
+            begin_negative = 0
+        end_negative = stroke.begin
+        for end in range(begin_negative+length_min, end_negative, length_min):
+            stroke_list.append(My_stroke(video_path, end-length_min, end, 0))
+        begin_negative = stroke.end
 
 
 # Get random augmentation values (for all frames in range from begin to end?)
@@ -233,7 +247,7 @@ Model Architecture
 '''
 def make_architecture(args, output_size):
     print_and_log('Make Model', log=args.log)
-    model = CCNAttentionNet_TwoStream(args.size_data.copy(), output_size)
+    model = CCNAttentionNet_TwoStream_V1(args.size_data.copy(), output_size)
     print_and_log('Model %s created' % (model.__class__.__name__), log=args.log)
     ## Use GPU
     if args.cuda:
@@ -479,7 +493,7 @@ def get_classification_strokes(working_folder_task):
 
     return train_strokes, validation_strokes, test_strokes
 
-def classification_task(working_folder, data_in, test_strokes_segmentation, log):
+def classification_task(working_folder, data_in, epochs, model_load, test_strokes_segmentation, log):
     '''
     Main of the classification task
     Perform also on the detection task when the videos for segmentation are provided
@@ -501,7 +515,7 @@ def classification_task(working_folder, data_in, test_strokes_segmentation, log)
         test_strokes_list.append(test_strokes)
 
     # Model variables
-    args = My_variables(working_folder, data_in, task_name)
+    args = My_variables(working_folder, data_in, task_name, epochs, model_load)
     
     # Architecture with the output of the lenght of possible classes - (Unknown not counted)
     # make two identical models
@@ -564,7 +578,7 @@ def get_lists_annotations(task_source, task_path):
     test_strokes = get_annotations(os.path.join(task_source, 'test'), os.path.join(task_path, 'test'))
     return train_strokes, validation_strokes, test_strokes
 
-def detection_task(working_folder, source_folder, data_in, log=None):
+def detection_task(working_folder, source_folder, data_in, epochs, model_load, log=None):
     '''
     Main of the detection task
     Return test segmentation video to try with the classification model
@@ -593,7 +607,7 @@ def detection_task(working_folder, source_folder, data_in, log=None):
 
 
     # Model variables
-    args = My_variables(working_folder, data_in, task_name)
+    args = My_variables(working_folder, data_in, task_name, epochs, model_load)
 
     # Architecture with the output of the lenght of possible classes - Positive and Negative
     model = make_architecture(args, 2)
@@ -614,16 +628,21 @@ def detection_task(working_folder, source_folder, data_in, log=None):
     test_videos_segmentation(model, args, list_of_test_videos)
     return 1
 
-    def parse_args():
+def parse_args():
     parser = argparse.ArgumentParser(description='Parse arguments defining stream information')
     parser.add_argument('--task','-t',default='dc',
                         choices=['dc', 'd', 'c'],
                         help='dc(detection and classification); d(detection); c(classification)')
-    parser.add_argument('--model', '-m',default='v1',
-                        help='choose model from model.py (e.g. v1, v2,...)')
+    parser.add_argument('--model', '-m',default='V1',
+                        help='choose model from model.py (e.g. V1, V2,...)')
     parser.add_argument('--stream_design','-sd',default='s',
                         choices=['s', 'srgb'],
                         help='s(skeleton); srgb(skeleton+rgb)')
+    parser.add_argument('--epochs','-e', default=1000,
+                        help='number of training epochs')
+    #TODO: do we need model_load for c and d each? could be difficult
+    parser.add_argument('--model_load','-ml', default=None,
+                        help='load model from \'/working_folder/Models/<task_name>/model_load')
     parser.add_argument('--test_include','-ti',default='rgb',
                         choices=['rgb', 's', 'srgb', 'notest'],
                         help='rgb(include running test on rgb data); s; srgb; notest')
@@ -635,7 +654,7 @@ def detection_task(working_folder, source_folder, data_in, log=None):
     
 if __name__ == "__main__":
     '''
-    Promt looks like this: python main_1.py -t <task> -m <model> -sd <stream_design> -ti <test_include> -li <log_include>
+    Promt looks like this: python main_2.py -t <task> -m <model> -sd <stream_design> -e <epochs> -ti <test_include> -li <log_include>
     '''
 
     #args from terminal
@@ -669,7 +688,7 @@ if __name__ == "__main__":
     log_folder = os.path.join(working_folder, 'logs')
     os.makedirs(log_folder, exist_ok=True)
     if args.log_include == 'log':
-        log = setup_logger('my_log', os.path.join(log_folder, '%s.log' % (datetime.datetime.now().strftime('%Y-%m-%d_%H-%M_{}-{}'.format(args.model, args.stream_design)))))
+        log = setup_logger('my_log', os.path.join(log_folder, '%s.log' % (datetime.datetime.now().strftime('%Y-%m-%d_%H-%M-%S_{}-{}'.format(args.model, args.stream_design)))))
     elif args.log_include == 'nolog':
         log = None
 
@@ -690,11 +709,11 @@ if __name__ == "__main__":
 
     # Tasks
     if args.task=='dc':
-        detection_task(working_folder, source_folder, data_in, log=log)
-        classification_task(working_folder, data_in, test_strokes_segmentation=test_include, log=log)
+        detection_task(working_folder, source_folder, data_in, args.epochs, args.model_load, log=log)
+        classification_task(working_folder, data_in, args.epochs, args.model_load, test_strokes_segmentation=test_include, log=log)
     elif args.task=='d':
-        detection_task(working_folder, source_folder, data_in, log=log)
+        detection_task(working_folder, source_folder, data_in, args.epochs, args.model_load, log=log)
     elif args.task=='c':
-        classification_task(working_folder, data_in, test_strokes_segmentation=test_include, log=log)
+        classification_task(working_folder, data_in, args.epochs, args.model_load, test_strokes_segmentation=test_include, log=log)
     
     print_and_log('All Done in %ds' % (time.time()-start_time), log=log)
