@@ -30,7 +30,7 @@ print('Nb of threads for OpenCV : ', cv2.getNumThreads())
 Model variables
 '''
 class My_variables():
-    def __init__(self, working_path, data_in, task_name, epochs, model_load, size_data=[320,180,96], cuda=True, batch_size=10, workers=10, lr=0.0001, nesterov=True, weight_decay=0.005, momentum=0.5):
+    def __init__(self, working_path, data_in, task_name, epochs, model_load, size_data=[320,180,96], cuda=True, batch_size=10, workers=5, lr=0.0001, nesterov=True, weight_decay=0.005, momentum=0.5):
         self.size_data = np.array(size_data)
         self.cuda = cuda
         self.workers = workers
@@ -600,9 +600,9 @@ def detection_task(working_folder, source_folder, data_in, epochs, model_load, l
     for path in task_paths:
         train_strokes, validation_strokes, test_strokes = get_lists_annotations(task_source, path)
         train_strokes_list.append(train_strokes)
-        validation_strokes_list.append()
+        validation_strokes_list.append(validation_strokes)
         test_strokes_list.append(test_strokes)
-    print('  task_paths:', *task_path)
+    print('  task_paths:', task_path)
     print()
 
 
@@ -694,7 +694,7 @@ if __name__ == "__main__":
 
     #TODO: cant we uncomment that part? Because everything is preprocessed already. Think it would be cleaner for final submission
     # Prepare work tree (respect levels for correct extraction of the frames)
-    # create_working_tree(working_folder, source_folder, frame_width=320, log=log)
+    #create_working_tree(working_folder, source_folder, frame_width=320, log=log)
     print_and_log('Working tree created in %ds' % (time.time()-start_time), log=log)
 
     #Included data for test
@@ -707,13 +707,16 @@ if __name__ == "__main__":
     elif args.test_include == 'notest':
         test_include=None
 
+    epochs = int(args.epochs)
+
     # Tasks
     if args.task=='dc':
-        detection_task(working_folder, source_folder, data_in, args.epochs, args.model_load, log=log)
-        classification_task(working_folder, data_in, args.epochs, args.model_load, test_strokes_segmentation=test_include, log=log)
+        detection_task(working_folder, source_folder, data_in, epochs, args.model_load, log=log)
+        classification_task(working_folder, data_in, epochs, args.model_load, test_strokes_segmentation=test_include, log=log)
     elif args.task=='d':
-        detection_task(working_folder, source_folder, data_in, args.epochs, args.model_load, log=log)
+        pass
+        detection_task(working_folder, source_folder, data_in, epochs, args.model_load, log=log)
     elif args.task=='c':
-        classification_task(working_folder, data_in, args.epochs, args.model_load, test_strokes_segmentation=test_include, log=log)
+        classification_task(working_folder, data_in, epochs, args.model_load, test_strokes_segmentation=test_include, log=log)
     
     print_and_log('All Done in %ds' % (time.time()-start_time), log=log)
