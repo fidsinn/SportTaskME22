@@ -97,7 +97,24 @@ class My_dataset(Dataset):
         sample = {'stream_1': torch.FloatTensor(frames_1), 'stream_2': torch.FloatTensor(frames_2), 'label' : self.dataset_list_1[idx].move, 'my_stroke' : {'video_path':self.dataset_list_1[idx].video_path, 'begin':self.dataset_list_1[idx].begin, 'end':self.dataset_list_1[idx].end}}
         return sample
 
+class My_dataset_temporal(Dataset):
+    def __init__(self, my_stroke, size_data, augmentation=False):
+        self.my_stroke = my_stroke
+        self.size_data = size_data
+        self.augmentation = augmentation
+        self.number_of_iteration = max(my_stroke.end-my_stroke.begin-size_data[2], 0)
 
+    def __len__(self):
+        return self.number_of_iteration
+
+    def __getitem__(self, idx):
+        begin = self.my_stroke.begin + idx
+        rgb = get_data(self.my_stroke.video_path, begin, begin+self.size_data[2], self.size_data, self.augmentation)
+        sample = {'rgb': torch.FloatTensor(rgb), 'label': self.my_stroke.move, 'my_stroke': {'video_path': self.my_stroke.video_path, 'begin': begin, 'end': begin + self.size_data[2]}}
+        return sample
+
+    def my_print(self, show_option=1):
+        self.annotation.my_print()
 
 # Global vars
 '''
@@ -397,6 +414,7 @@ def validation_epoch(epoch, args, model, data_loader, criterion):
         progress_bar(N, N, 'Validation - Loss = %.5g - Accuracy = %.3g (%d/%d) - Time = %ds' % (_loss, _acc/N, _acc, N, time.time() - begin_time), 1, log=args.log)
         return _loss, _acc/N
 
+#TODO: Finn
 '''
 Test Process
 '''
@@ -420,6 +438,26 @@ def store_xml_data(my_stroke_list, predicted, xml_files, list_of_strokes=None):
             stroke_xml = ET.SubElement(xml_files['test'], 'video')
             stroke_xml.set('name', '%s.mp4' % (video_name))
             stroke_xml.set('class', list_of_strokes[prediction_index])
+
+def store_stroke_to_xml(my_stroke_list, xml_files, list_of_strokes=None):
+    '''
+    This function stores strokes in xml files.
+    '''
+    for my_stroke in my_stroke_list:
+        video_name = my_stroke.video_path.split('/')[-1]
+        if list_of_strokes is None:
+            if video_name not in xml_files:
+                xml_files[video_name] = ET.Element('video')
+            if my_stroke.move:
+                stroke_xml = ET.SubElement(xml_files[video_name], 'action')
+                stroke_xml.set('begin', str(my_stroke.begin))
+                stroke_xml.set('end', str(my_stroke.end))
+        else:
+            if 'test' not in xml_files:
+                xml_files['test'] = ET.Element('videos')
+            stroke_xml = ET.SubElement(xml_files['test'], 'video')
+            stroke_xml.set('name', '%s.mp4' % (video_name))
+            stroke_xml.set('class', list_of_strokes[my_stroke.move])
 
 '''
 Save the predictions in xml files
@@ -477,19 +515,18 @@ def test_prob_and_vote(model, args, test_list, list_of_strokes=None):
             test_loader = DataLoader(test_set, batch_size=args.batch_size, shuffle=False, num_workers=args.workers)
 
             for batch in test_loader:
-                stream_1, stream_2 = batch['stream_1'], batch['stream_2']
-                stream_1 = Variable(stream_1.type(args.dtype))
-                stream_2 = Variable(stream_2.type(args.dtype))
+                rgb = batch['rgb']
+                rgb = Variable(rgb.type(args.dtype))
 
-                output = model(stream_1, stream_2) #?
-                _, predicted = torch.max(output.detach(), 1) # return max value of each layer of output - _: values ;predicted: indices
+                output = model(rgb)
+                _, predicted = torch.max(output.detach(), 1)
                 
                 all_probs.extend(output.data.tolist())
-                predictions.extend(predicted.tolist()) # fill list with indices of each batch
+                predictions.extend(predicted.tolist())
 
             middle = int(len(all_probs)/2)
             prob_gaussian = cv2.GaussianBlur(np.array(all_probs), (1, 2*middle+1), 0) # sigma = 0.3*((ksize-1)*0.5 - 1) + 0.8
-            prob_mean = np.mean(all_probs,0) # here the prob functions are defined
+            prob_mean = np.mean(all_probs,0)
 
             # Store results in xml files
             my_stroke.move = max(set(predictions), key=predictions.count)
@@ -503,6 +540,118 @@ def test_prob_and_vote(model, args, test_list, list_of_strokes=None):
         save_xml_data(xml_files_vote, path_xml_save_vote)
         save_xml_data(xml_files_mean, path_xml_save_mean)
         save_xml_data(xml_files_gaussian, path_xml_save_gaussian)
+    return 1
+
+'''
+Inference on test videos
+'''
+def infer_stroke_list_from_vector(video_path, vector_decision, threshold=30):
+    '''
+    Segment the vectore in strokes according to min threshold. Note: there is no maximun threshold
+    '''
+    vector_decision = np.array(vector_decision)>0
+    begin = -1
+    stroke_list = []
+    for idx, frame_decision in enumerate(vector_decision):
+        if frame_decision and begin==-1:
+            begin = idx
+        elif not frame_decision and begin != -1:
+            if idx-begin>=threshold:
+                stroke_list.append(My_stroke(video_path, begin, idx, 1))
+            begin = -1
+    # Case if last element is True
+    if frame_decision and begin != -1:
+        if idx-begin>=threshold:
+            stroke_list.append(My_stroke(video_path, begin, idx, 1))
+    return stroke_list
+
+def compute_strokes_from_predictions(video_path, all_probs, size_data, window_decision=100):
+    # Repeat the first and last prediction to center all predictions #
+    predictions = [all_probs[0]]*(size_data[2]//2)
+    predictions.extend(all_probs)
+    predictions.extend([all_probs[-1]]*(size_data[2]//2))
+
+    # Vote decision #
+    vote_list = [[1. if prob == max(probs) else 0 for prob in probs] for probs in predictions]
+    vote_list = [[vote/sum(votes) for vote in votes]for votes in vote_list]
+    vote_list_windowed = np.array([np.sum(vote_list[i:i+window_decision], axis=0).tolist() for i in range(len(vote_list) - window_decision + 1)])
+    vote_decision = [votes.tolist().index(max(votes)) for votes in vote_list_windowed]
+    vote_strokes = infer_stroke_list_from_vector(video_path, vote_decision)
+
+    # Mean decision #
+    all_probs_mean = np.array([np.mean(predictions[max(int(i-window_decision/2),0):min(int(i+window_decision/2),len(predictions)-1)], axis=0).tolist() for i in range(len(predictions))])
+    mean_decision = [probs.tolist().index(max(probs)) for probs in all_probs_mean]
+    mean_strokes = infer_stroke_list_from_vector(video_path, mean_decision)
+
+    # Gaussian weights decision #
+    all_probs_gauss = cv2.GaussianBlur(np.array(predictions), (1, window_decision+1), 0) # sigma = 0.3*((ksize-1)*0.5 - 1) + 0.8
+    gaussian_decision = [probs.tolist().index(max(probs)) for probs in all_probs_gauss]
+    gaussian_strokes = infer_stroke_list_from_vector(video_path, gaussian_decision)
+
+    return vote_strokes, mean_strokes, gaussian_strokes
+
+def test_videos_segmentation(model, args, test_list, sum_stroke_scores=False):
+    '''
+    
+    '''
+    with torch.no_grad():
+        model.eval() # Set model to evaluation mode - needed for batchnorm
+        xml_files_vote = {}
+        path_xml_save_vote = os.path.join(args.model_name, 'xml_testseg_vote')
+        os.mkdir(path_xml_save_vote)
+        xml_files_mean = {}
+        path_xml_save_mean = os.path.join(args.model_name, 'xml_testseg_mean')
+        os.mkdir(path_xml_save_mean)
+        xml_files_gaussian = {}
+        path_xml_save_gaussian = os.path.join(args.model_name, 'xml_testseg_gaussian')
+        os.mkdir(path_xml_save_gaussian)
+
+        if sum_stroke_scores:
+            xml_files_vote_scoresummed = {}
+            path_xml_save_vote_scoresummed = os.path.join(args.model_name, 'xml_testseg_vote_scoresummed')
+            os.mkdir(path_xml_save_vote_scoresummed)
+            xml_files_mean_scoresummed = {}
+            path_xml_save_mean_scoresummed = os.path.join(args.model_name, 'xml_testseg_mean_scoresummed')
+            os.mkdir(path_xml_save_mean_scoresummed)
+            xml_files_gaussian_scoresummed = {}
+            path_xml_save_gaussian_scoresummed = os.path.join(args.model_name, 'xml_testseg_gaussian_scoresummed')
+            os.mkdir(path_xml_save_gaussian_scoresummed)
+
+        for idx, my_stroke in enumerate(test_list):
+            progress_bar(idx, len(test_list), 'Window Testing')
+
+            all_probs = []
+            test_set = My_dataset_temporal(my_stroke, args.size_data, augmentation=False)
+            test_loader = DataLoader(test_set, batch_size=args.batch_size, shuffle=False, num_workers=args.workers)
+
+            for idx, batch in enumerate(test_loader):
+                rgb = batch['rgb']
+                rgb = Variable(rgb.type(args.dtype))
+                output = model(rgb)                
+                all_probs.extend(output.data.tolist())
+            vote_strokes, mean_strokes, gaussian_strokes = compute_strokes_from_predictions(my_stroke.video_path, all_probs, args.size_data)
+
+            store_stroke_to_xml(vote_strokes, xml_files_vote)
+            store_stroke_to_xml(mean_strokes, xml_files_mean)
+            store_stroke_to_xml(gaussian_strokes, xml_files_gaussian)
+
+            if sum_stroke_scores:
+                all_probs_scoresummed = [[probs[0], probs[1:].sum()] for probs in all_probs]
+                vote_strokes_scoresummed, mean_strokes_scoresummed, gaussian_strokes_scoresummed = compute_strokes_from_predictions(my_stroke.video_path, all_probs_scoresummed, args.size_data)
+                
+                store_stroke_to_xml(vote_strokes_scoresummed, xml_files_vote_scoresummed)
+                store_stroke_to_xml(mean_strokes_scoresummed, xml_files_mean_scoresummed)
+                store_stroke_to_xml(gaussian_strokes_scoresummed, xml_files_gaussian_scoresummed)
+
+        progress_bar(len(test_list), len(test_list), 'Window Testing Done', 1, log=args.log)
+        save_xml_data(xml_files_vote, path_xml_save_vote)
+        save_xml_data(xml_files_mean, path_xml_save_mean)
+        save_xml_data(xml_files_gaussian, path_xml_save_gaussian)
+
+        if sum_stroke_scores:
+            save_xml_data(xml_files_vote_scoresummed, path_xml_save_vote_scoresummed)
+            save_xml_data(xml_files_mean_scoresummed, path_xml_save_mean_scoresummed)
+            save_xml_data(xml_files_gaussian_scoresummed, path_xml_save_gaussian_scoresummed)
     return 1
 
 # Classification Task
@@ -562,10 +711,10 @@ def classification_task(working_folder, data_in, epochs, model_load, test_stroke
     # Test process
     load_checkpoint(model, args)
     # TODO make testing stuff work
-    # test_model(model, args, test_loader, list_of_strokes=LIST_OF_STROKES)
-    # test_prob_and_vote(model, args, test_strokes, list_of_strokes=LIST_OF_STROKES)
-    # if test_strokes_segmentation is not None:
-    #     test_videos_segmentation(model, args, test_strokes_segmentation, sum_stroke_scores=True)
+    test_model(model, args, test_loader, list_of_strokes=LIST_OF_STROKES)
+    test_prob_and_vote(model, args, test_strokes, list_of_strokes=LIST_OF_STROKES)
+    if test_strokes_segmentation is not None:
+        test_videos_segmentation(model, args, test_strokes_segmentation, sum_stroke_scores=True)
     return 1
 
 '''
@@ -653,140 +802,11 @@ def detection_task(working_folder, source_folder, data_in, epochs, model_load, l
     # Test process
     load_checkpoint(model, args)
     # TODO
-    #test_model(model, args, test_loader)
-    #test_prob_and_vote(model, args, test_strokes)
+    test_model(model, args, test_loader)
+    test_prob_and_vote(model, args, test_strokes)
     list_of_test_videos = get_videos_list(os.path.join(task_path, 'test'))
     test_videos_segmentation(model, args, list_of_test_videos)
     return 1
-
-#TODO: Finn
-def test_videos_segmentation(model, args, test_list, sum_stroke_scores=False):
-    '''
-    
-    '''
-    with torch.no_grad():
-        model.eval() # Set model to evaluation mode - needed for batchnorm
-        xml_files_vote = {}
-        path_xml_save_vote = os.path.join(args.model_name, 'xml_testseg_vote')
-        os.mkdir(path_xml_save_vote)
-        xml_files_mean = {}
-        path_xml_save_mean = os.path.join(args.model_name, 'xml_testseg_mean')
-        os.mkdir(path_xml_save_mean)
-        xml_files_gaussian = {}
-        path_xml_save_gaussian = os.path.join(args.model_name, 'xml_testseg_gaussian')
-        os.mkdir(path_xml_save_gaussian)
-
-        if sum_stroke_scores:
-            xml_files_vote_scoresummed = {}
-            path_xml_save_vote_scoresummed = os.path.join(args.model_name, 'xml_testseg_vote_scoresummed')
-            os.mkdir(path_xml_save_vote_scoresummed)
-            xml_files_mean_scoresummed = {}
-            path_xml_save_mean_scoresummed = os.path.join(args.model_name, 'xml_testseg_mean_scoresummed')
-            os.mkdir(path_xml_save_mean_scoresummed)
-            xml_files_gaussian_scoresummed = {}
-            path_xml_save_gaussian_scoresummed = os.path.join(args.model_name, 'xml_testseg_gaussian_scoresummed')
-            os.mkdir(path_xml_save_gaussian_scoresummed)
-
-        for idx, my_stroke in enumerate(test_list):
-            progress_bar(idx, len(test_list), 'Window Testing')
-
-            all_probs = []
-            test_set = My_dataset_temporal(my_stroke, args.size_data, augmentation=False)
-            test_loader = DataLoader(test_set, batch_size=args.batch_size, shuffle=False, num_workers=args.workers)
-
-            for idx, batch in enumerate(test_loader):
-                rgb = batch['rgb']
-                rgb = Variable(rgb.type(args.dtype))
-                output = model(rgb)                
-                all_probs.extend(output.data.tolist())
-            vote_strokes, mean_strokes, gaussian_strokes = compute_strokes_from_predictions(my_stroke.video_path, all_probs, args.size_data)
-
-            store_stroke_to_xml(vote_strokes, xml_files_vote)
-            store_stroke_to_xml(mean_strokes, xml_files_mean)
-            store_stroke_to_xml(gaussian_strokes, xml_files_gaussian)
-
-            if sum_stroke_scores:
-                all_probs_scoresummed = [[probs[0], probs[1:].sum()] for probs in all_probs]
-                vote_strokes_scoresummed, mean_strokes_scoresummed, gaussian_strokes_scoresummed = compute_strokes_from_predictions(my_stroke.video_path, all_probs_scoresummed, args.size_data)
-                
-                store_stroke_to_xml(vote_strokes_scoresummed, xml_files_vote_scoresummed)
-                store_stroke_to_xml(mean_strokes_scoresummed, xml_files_mean_scoresummed)
-                store_stroke_to_xml(gaussian_strokes_scoresummed, xml_files_gaussian_scoresummed)
-
-        progress_bar(len(test_list), len(test_list), 'Window Testing Done', 1, log=args.log)
-        save_xml_data(xml_files_vote, path_xml_save_vote)
-        save_xml_data(xml_files_mean, path_xml_save_mean)
-        save_xml_data(xml_files_gaussian, path_xml_save_gaussian)
-
-        if sum_stroke_scores:
-            save_xml_data(xml_files_vote_scoresummed, path_xml_save_vote_scoresummed)
-            save_xml_data(xml_files_mean_scoresummed, path_xml_save_mean_scoresummed)
-            save_xml_data(xml_files_gaussian_scoresummed, path_xml_save_gaussian_scoresummed)
-    return 1
-
-class My_dataset_temporal(Dataset):
-    def __init__(self, my_stroke, size_data, augmentation=False):
-        self.my_stroke = my_stroke
-        self.size_data = size_data
-        self.augmentation = augmentation
-        self.number_of_iteration = max(my_stroke.end-my_stroke.begin-size_data[2], 0)
-
-    def __len__(self):
-        return self.number_of_iteration
-
-    def __getitem__(self, idx):
-        begin = self.my_stroke.begin + idx
-        rgb = get_data(self.my_stroke.video_path, begin, begin+self.size_data[2], self.size_data, self.augmentation)
-        sample = {'rgb': torch.FloatTensor(rgb), 'label': self.my_stroke.move, 'my_stroke': {'video_path': self.my_stroke.video_path, 'begin': begin, 'end': begin + self.size_data[2]}}
-        return sample
-
-    def my_print(self, show_option=1):
-        self.annotation.my_print()
-
-def compute_strokes_from_predictions(video_path, all_probs, size_data, window_decision=100):
-    # Repeat the first and last prediction to center all predictions #
-    predictions = [all_probs[0]]*(size_data[2]//2)
-    predictions.extend(all_probs)
-    predictions.extend([all_probs[-1]]*(size_data[2]//2))
-
-    # Vote decision #
-    vote_list = [[1. if prob == max(probs) else 0 for prob in probs] for probs in predictions]
-    vote_list = [[vote/sum(votes) for vote in votes]for votes in vote_list]
-    vote_list_windowed = np.array([np.sum(vote_list[i:i+window_decision], axis=0).tolist() for i in range(len(vote_list) - window_decision + 1)])
-    vote_decision = [votes.tolist().index(max(votes)) for votes in vote_list_windowed]
-    vote_strokes = infer_stroke_list_from_vector(video_path, vote_decision)
-
-    # Mean decision #
-    all_probs_mean = np.array([np.mean(predictions[max(int(i-window_decision/2),0):min(int(i+window_decision/2),len(predictions)-1)], axis=0).tolist() for i in range(len(predictions))])
-    mean_decision = [probs.tolist().index(max(probs)) for probs in all_probs_mean]
-    mean_strokes = infer_stroke_list_from_vector(video_path, mean_decision)
-
-    # Gaussian weights decision #
-    all_probs_gauss = cv2.GaussianBlur(np.array(predictions), (1, window_decision+1), 0) # sigma = 0.3*((ksize-1)*0.5 - 1) + 0.8
-    gaussian_decision = [probs.tolist().index(max(probs)) for probs in all_probs_gauss]
-    gaussian_strokes = infer_stroke_list_from_vector(video_path, gaussian_decision)
-
-    return vote_strokes, mean_strokes, gaussian_strokes
-
-def store_stroke_to_xml(my_stroke_list, xml_files, list_of_strokes=None):
-    '''
-    This function stores strokes in xml files.
-    '''
-    for my_stroke in my_stroke_list:
-        video_name = my_stroke.video_path.split('/')[-1]
-        if list_of_strokes is None:
-            if video_name not in xml_files:
-                xml_files[video_name] = ET.Element('video')
-            if my_stroke.move:
-                stroke_xml = ET.SubElement(xml_files[video_name], 'action')
-                stroke_xml.set('begin', str(my_stroke.begin))
-                stroke_xml.set('end', str(my_stroke.end))
-        else:
-            if 'test' not in xml_files:
-                xml_files['test'] = ET.Element('videos')
-            stroke_xml = ET.SubElement(xml_files['test'], 'video')
-            stroke_xml.set('name', '%s.mp4' % (video_name))
-            stroke_xml.set('class', list_of_strokes[my_stroke.move])
 
 def parse_args():
     parser = argparse.ArgumentParser(description='Parse arguments defining stream information')
@@ -814,7 +834,7 @@ def parse_args():
     
 if __name__ == "__main__":
     '''
-    Promt looks like this: python main_2.py -t <task> -m <model> -sd <stream_design> -e <epochs> -ti <test_include> -li <log_include>
+    Promt looks like this: python main_2.py -t <task> -m <model> -sd <stream_design> -e <epochs> -ml <model_load> -ti <test_include> -li <log_include>
     '''
 
     #args from terminal
