@@ -803,7 +803,7 @@ def parse_args():
     parser.add_argument('--stream_design','-sd',default='rgb',
                         choices=['rgb', 's', 'srgb'],
                         help='rgb(base rgb); s(skeleton); srgb(skeleton rgb)')
-    parser.add_argument('--epochs','-e', default=1000,
+    parser.add_argument('--epochs','-e', default=500,
                         help='number of training epochs')
     #TODO: do we need model_load for c and d each? could be difficult
     parser.add_argument('--model_load','-ml', default=None,
