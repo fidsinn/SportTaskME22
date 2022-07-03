@@ -37,7 +37,7 @@ print('Nb of threads for OpenCV : ', cv2.getNumThreads())
 Model variables
 '''
 class my_variables():
-    def __init__(self, working_path, task_name, stream_design, epochs, model_load=None, size_data=[320,180,96], cuda=True, batch_size=10, workers=1, lr=0.0001, nesterov=True, weight_decay=0.005, momentum=0.5):
+    def __init__(self, working_path, task_name, stream_design, epochs, model_load=None, size_data=[320,180,96], cuda=True, batch_size=10, workers=5, lr=0.0001, nesterov=True, weight_decay=0.005, momentum=0.5):
         self.size_data = np.array(size_data)
         self.cuda = cuda
         self.workers = workers
@@ -430,8 +430,8 @@ def test_model(model, args, data_loader, list_of_strokes=None):
         save_xml_data(xml_files, path_xml_save)
 
 def test_prob_and_vote(model, args, test_list, list_of_strokes=None):
-    with torch.no_grad():
-        model.eval() # Set model to evaluation mode - needed for batchnorm
+    with torch.no_grad(): # turn off gradients computation (in combination with model.eval())
+        model.eval() # Set model to evaluation mode - needed for batchnorm (inactivates BatchNorm Layers)
         xml_files_vote = {}
         path_xml_save_vote = os.path.join(args.model_name, 'xml_test_vote')
         os.mkdir(path_xml_save_vote)
@@ -803,7 +803,7 @@ def parse_args():
     parser.add_argument('--stream_design','-sd',default='rgb',
                         choices=['rgb', 's', 'srgb'],
                         help='rgb(base rgb); s(skeleton); srgb(skeleton rgb)')
-    parser.add_argument('--epochs','-e', default=1000,
+    parser.add_argument('--epochs','-e', default=500,
                         help='number of training epochs')
     #TODO: do we need model_load for c and d each? could be difficult
     parser.add_argument('--model_load','-ml', default=None,
@@ -821,14 +821,17 @@ if __name__ == "__main__":
     '''
     Promt looks like this: python main_1.py -t <task> -m <model> -sd <stream_design> -ti <test_include> -li <log_include>
     '''
-    
+
+    #args from terminal
+    args = parse_args()
+
     # Chrono
     start_time = time.time()
     print()
     print('Start time: ', datetime.datetime.now().strftime('%d/%m/%Y %H:%M:%S'))
 
-    print('Running Modeling-Task with args: task:{}; model:{}; stream_design:{}; test_include:{}; log_include:{}'\
-        .format(args.task, args.model, args.stream_design, args.test_include, args.log_include))
+    print('Running Modeling-Task with args: task:{}; model:{}; stream_design:{}; epochs:{}; model_load:{}; test_include:{}; log_include:{}'\
+        .format(args.task, args.model, args.stream_design, args.epochs, args.model_load, args.test_include, args.log_include))
         
     print('Working GPU device:',torch.cuda.get_device_name(torch.cuda.current_device()))
 
@@ -862,12 +865,14 @@ if __name__ == "__main__":
     elif args.test_include == 'notest':
         test_include=None
 
+    epochs = int(args.epochs)
+
     # Tasks
     if args.task=='dc':
-        detection_task(working_folder, source_folder, args.stream_design, args.epochs, args.model_load, log=log)
-        classification_task(working_folder, args.stream_design, args.epochs, args.model_load, test_strokes_segmentation=test_include, log=log)
+        detection_task(working_folder, source_folder, args.stream_design, epochs, args.model_load, log=log)
+        classification_task(working_folder, args.stream_design, epochs, args.model_load, test_strokes_segmentation=test_include, log=log)
     elif args.task=='d':
-        detection_task(working_folder, source_folder, args.stream_design, args.epochs, args.model_load, log=log)
+        detection_task(working_folder, source_folder, args.stream_design, epochs, args.model_load, log=log)
     elif args.task=='c':
         classification_task(working_folder, args.stream_design, args.epochs, args.model_load, test_strokes_segmentation=test_include, log=log)
     

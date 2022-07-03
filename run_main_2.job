@@ -19,4 +19,4 @@ cd GIT/SportTaskME22/
 module load Anaconda3
 conda activate open-mmlab
 
-srun python main_2.py -t dc -m V1 -sd srgb -e 1000 -ti notest -li log
+srun python main_2.py -t dc -m V1 -sd srgb -ti notest -li log

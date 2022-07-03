@@ -30,25 +30,27 @@ print('Nb of threads for OpenCV : ', cv2.getNumThreads())
 Model variables
 '''
 class My_variables():
-    def __init__(self, working_path, data_in, task_name, epochs, model_load, size_data=[320,180,96], cuda=True, batch_size=10, workers=5, lr=0.0001, nesterov=True, weight_decay=0.005, momentum=0.5):
+    def __init__(self, working_path, data_in, task_name, epochs, model_load, test_include, size_data=[320,180,96], cuda=True, batch_size=10, workers=5, lr=0.0001, nesterov=True, weight_decay=0.005, momentum=0.5):
+        self.data_in = data_in
+        self.epochs = epochs
+        self.test_include = test_include
         self.size_data = np.array(size_data)
         self.cuda = cuda
         self.workers = workers
         self.batch_size = batch_size
-        self.epochs = epochs
         self.lr = lr
         self.lr_min = 0.000005
         self.lr_max = 0.01
         self.nesterov = nesterov
         self.weight_decay = weight_decay
         self.momentum = momentum
-        self.data_in = data_in 
         if model_load is None:
             self.model_name = os.path.join(working_path, 'Models', task_name + '_' + data_in[0] + '-' + data_in[1], '%s' % (datetime.datetime.now().strftime('%Y-%m-%d_%H-%M-%S')))
             self.train_model = True
         else:
             self.model_name = os.path.join(working_path, 'Models', task_name + '_' + data_in[0] + '-' + data_in[1], model_load)
             self.train_model = False
+            print('Loading model:', self.model_name)
         os.makedirs(self.model_name, exist_ok=True)
         if cuda:
             self.dtype = torch.cuda.FloatTensor
@@ -97,7 +99,27 @@ class My_dataset(Dataset):
         sample = {'stream_1': torch.FloatTensor(frames_1), 'stream_2': torch.FloatTensor(frames_2), 'label' : self.dataset_list_1[idx].move, 'my_stroke' : {'video_path':self.dataset_list_1[idx].video_path, 'begin':self.dataset_list_1[idx].begin, 'end':self.dataset_list_1[idx].end}}
         return sample
 
+class My_dataset_temporal(Dataset):
+    def __init__(self, my_stroke, size_data, test_include, augmentation=False):
+        self.stroke_dataset_1 = my_stroke[0]
+        self.stroke_dataset_2 = my_stroke[1]
+        self.size_data = size_data
+        self.test_include = test_include
+        self.augmentation = augmentation
+        self.number_of_iteration = max(stroke_dataset_1.end-stroke_dataset_1.begin-size_data[2], 0)
 
+    def __len__(self):
+        return self.number_of_iteration
+
+    def __getitem__(self, idx):
+        begin = self.stroke_dataset_1.begin + idx
+        frames_1, frames_2 = get_data(self.stroke_dataset_1[idx], self.stroke_dataset_2[idx], self.size_data, self.augmentation)
+        #rgb = get_data_test(self.my_stroke.video_path, begin, begin+self.size_data[2], self.size_data, self.augmentation)
+        sample = {'stream_1': torch.FloatTensor(frames_1), 'stream_2': torch.FloatTensor(frames_2), 'label': self.stroke_dataset_1[idx].move, 'my_stroke': {'video_path': self.stroke_dataset_1[idx].video_path, 'begin': begin, 'end': begin + self.size_data[2]}}
+        return sample
+
+    def my_print(self, show_option=1):
+        self.annotation.my_print()
 
 # Global vars
 '''
@@ -222,8 +244,30 @@ def get_data(data_1, data_2, size_data, augmentation):
     frame_data_2 = np.transpose(frame_data_2, (1, 3, 2, 0))
     return frame_data_1, frame_data_2
 
+def get_data_test(data_path, begin, end, size_data, augmentation):
+    test_stream_data = []
+    if augmentation:
+        angle, zoom, tx, ty, flip, begin = get_augmentation_parameters(begin, end, size_data)
+        R_matrix = cv2.getRotationMatrix2D((size_data[0]//2-tx, size_data[1]//2-ty), angle, 1)
+    else:
+        angle, zoom, tx, ty, flip, begin = 0, 1, 0, 0, 0, max((begin+end-size_data[2])//2,0)
+    
+    max_frame_number = len(os.listdir(data_path))-1
 
-
+    for frame_number in range(begin, begin + size_data[2]):
+        if frame_number > max_frame_number:
+            frame_number = max_frame_number
+        try:
+            test_stream = cv2.imread(os.path.join(data_path, '%08d.png' % frame_number))
+            test_stream = cv2.resize(test_stream, (size_data[0], size_data[1])).astype(float) / 255
+            if augmentation:
+                test_stream = apply_augmentation(test_stream, zoom, R_matrix, flip)
+        except:
+            raise ValueError('Problem with %s begin %d size %s' % (os.path.join(data_path, '%08d.png' % frame_number), begin, str(size_data)))
+        test_stream_data.append(cv2.split(test_stream))
+    # To match size_data variable, transposition is needed. From (T,C,H,W) to (C,W,H,T).
+    test_stream_data = np.transpose(test_stream_data, (1, 3, 2, 0))
+    return test_stream_data
 
 '''
 Build dataloader from list of strokes
@@ -397,6 +441,7 @@ def validation_epoch(epoch, args, model, data_loader, criterion):
         progress_bar(N, N, 'Validation - Loss = %.5g - Accuracy = %.3g (%d/%d) - Time = %ds' % (_loss, _acc/N, _acc, N, time.time() - begin_time), 1, log=args.log)
         return _loss, _acc/N
 
+#TODO: Finn
 '''
 Test Process
 '''
@@ -465,6 +510,7 @@ def test_model(model, args, data_loader, list_of_strokes=None):
             # Get batch tensor
             stream_1, stream_2, my_stroke_list = batch['stream_1'], batch['stream_2'], batch['my_stroke']
             progress_bar(args.batch_size*batch_idx, N, 'Testing')
+
             stream_1 = Variable(stream_1.type(args.dtype))
             stream_2 = Variable(stream_2.type(args.dtype))
             output = model(stream_1, stream_2)
@@ -473,6 +519,170 @@ def test_model(model, args, data_loader, list_of_strokes=None):
 
         progress_bar(N, N, 'Test done', 1, log=args.log)
         save_xml_data(xml_files, path_xml_save)
+
+def test_prob_and_vote(model, args, test_list, list_of_strokes=None):
+    with torch.no_grad(): # turn off gradients computation (in combination with model.eval())
+        model.eval() # Set model to evaluation mode - needed for batchnorm (inactivates BatchNorm Layers)
+        xml_files_vote = {}
+        path_xml_save_vote = os.path.join(args.model_name, 'xml_test_vote')
+        os.mkdir(path_xml_save_vote)
+        xml_files_mean = {}
+        path_xml_save_mean = os.path.join(args.model_name, 'xml_test_mean')
+        os.mkdir(path_xml_save_mean)
+        xml_files_gaussian = {}
+        path_xml_save_gaussian = os.path.join(args.model_name, 'xml_test_gaussian')
+        os.mkdir(path_xml_save_gaussian)
+
+        for idx, my_stroke in enumerate(test_list):
+            progress_bar(idx, len(test_list), 'Window Testing')
+
+            predictions = []
+            all_probs = []
+            test_set = My_dataset_temporal(my_stroke, args.size_data, args.test_include, augmentation=False)
+            test_loader = DataLoader(test_set, batch_size=args.batch_size, shuffle=False, num_workers=args.workers)
+
+            for batch in test_loader:
+                stream_1, stream_2 = batch['stream_1'], batch['stream_2'] #??? batch['{}'.format(args.test_include)]      2 stream needed in (test_prob_and_vote, test_model, test_videos_segmentation)?
+                stream_1 = Variable(stream_1.type(args.dtype))
+                stream_2 = Variable(stream_2.type(args.dtype))
+
+                output = model(stream_1, stream_2)
+                _, predicted = torch.max(output.detach(), 1)
+                
+                all_probs.extend(output.data.tolist())
+                predictions.extend(predicted.tolist())
+
+            middle = int(len(all_probs)/2)
+            prob_gaussian = cv2.GaussianBlur(np.array(all_probs), (1, 2*middle+1), 0) # sigma = 0.3*((ksize-1)*0.5 - 1) + 0.8
+            prob_mean = np.mean(all_probs,0)
+
+            # Store results in xml files
+            my_stroke.move = max(set(predictions), key=predictions.count)
+            store_stroke_to_xml([my_stroke], xml_files_vote, list_of_strokes)
+            my_stroke.move = prob_mean.tolist().index(max(prob_mean))
+            store_stroke_to_xml([my_stroke], xml_files_mean, list_of_strokes)
+            my_stroke.move = prob_gaussian[middle].tolist().index(max(prob_gaussian[middle]))
+            store_stroke_to_xml([my_stroke], xml_files_gaussian, list_of_strokes)
+
+        progress_bar(len(test_list), len(test_list), 'Window Testing Done', 1, log=args.log)
+        save_xml_data(xml_files_vote, path_xml_save_vote)
+        save_xml_data(xml_files_mean, path_xml_save_mean)
+        save_xml_data(xml_files_gaussian, path_xml_save_gaussian)
+    return 1
+
+'''
+Inference on test videos
+'''
+def infer_stroke_list_from_vector(video_path, vector_decision, threshold=30):
+    '''
+    Segment the vectore in strokes according to min threshold. Note: there is no maximun threshold
+    '''
+    vector_decision = np.array(vector_decision)>0
+    begin = -1
+    stroke_list = []
+    for idx, frame_decision in enumerate(vector_decision):
+        if frame_decision and begin==-1:
+            begin = idx
+        elif not frame_decision and begin != -1:
+            if idx-begin>=threshold:
+                stroke_list.append(My_stroke(video_path, begin, idx, 1))
+            begin = -1
+    # Case if last element is True
+    if frame_decision and begin != -1:
+        if idx-begin>=threshold:
+            stroke_list.append(My_stroke(video_path, begin, idx, 1))
+    return stroke_list
+
+def compute_strokes_from_predictions(video_path, all_probs, size_data, window_decision=100):
+    # Repeat the first and last prediction to center all predictions #
+    predictions = [all_probs[0]]*(size_data[2]//2)
+    predictions.extend(all_probs)
+    predictions.extend([all_probs[-1]]*(size_data[2]//2))
+
+    # Vote decision #
+    vote_list = [[1. if prob == max(probs) else 0 for prob in probs] for probs in predictions]
+    vote_list = [[vote/sum(votes) for vote in votes]for votes in vote_list]
+    vote_list_windowed = np.array([np.sum(vote_list[i:i+window_decision], axis=0).tolist() for i in range(len(vote_list) - window_decision + 1)])
+    vote_decision = [votes.tolist().index(max(votes)) for votes in vote_list_windowed]
+    vote_strokes = infer_stroke_list_from_vector(video_path, vote_decision)
+
+    # Mean decision #
+    all_probs_mean = np.array([np.mean(predictions[max(int(i-window_decision/2),0):min(int(i+window_decision/2),len(predictions)-1)], axis=0).tolist() for i in range(len(predictions))])
+    mean_decision = [probs.tolist().index(max(probs)) for probs in all_probs_mean]
+    mean_strokes = infer_stroke_list_from_vector(video_path, mean_decision)
+
+    # Gaussian weights decision #
+    all_probs_gauss = cv2.GaussianBlur(np.array(predictions), (1, window_decision+1), 0) # sigma = 0.3*((ksize-1)*0.5 - 1) + 0.8
+    gaussian_decision = [probs.tolist().index(max(probs)) for probs in all_probs_gauss]
+    gaussian_strokes = infer_stroke_list_from_vector(video_path, gaussian_decision)
+
+    return vote_strokes, mean_strokes, gaussian_strokes
+
+def test_videos_segmentation(model, args, test_list, sum_stroke_scores=False):
+    '''
+    
+    '''
+    with torch.no_grad():
+        model.eval() # Set model to evaluation mode - needed for batchnorm
+        xml_files_vote = {}
+        path_xml_save_vote = os.path.join(args.model_name, 'xml_testseg_vote')
+        os.mkdir(path_xml_save_vote)
+        xml_files_mean = {}
+        path_xml_save_mean = os.path.join(args.model_name, 'xml_testseg_mean')
+        os.mkdir(path_xml_save_mean)
+        xml_files_gaussian = {}
+        path_xml_save_gaussian = os.path.join(args.model_name, 'xml_testseg_gaussian')
+        os.mkdir(path_xml_save_gaussian)
+
+        if sum_stroke_scores:
+            xml_files_vote_scoresummed = {}
+            path_xml_save_vote_scoresummed = os.path.join(args.model_name, 'xml_testseg_vote_scoresummed')
+            os.mkdir(path_xml_save_vote_scoresummed)
+            xml_files_mean_scoresummed = {}
+            path_xml_save_mean_scoresummed = os.path.join(args.model_name, 'xml_testseg_mean_scoresummed')
+            os.mkdir(path_xml_save_mean_scoresummed)
+            xml_files_gaussian_scoresummed = {}
+            path_xml_save_gaussian_scoresummed = os.path.join(args.model_name, 'xml_testseg_gaussian_scoresummed')
+            os.mkdir(path_xml_save_gaussian_scoresummed)
+
+        for idx, my_stroke in enumerate(test_list):
+            progress_bar(idx, len(test_list), 'Window Testing')
+
+            all_probs = []
+            test_set = My_dataset_temporal(my_stroke, args.size_data, augmentation=False)
+            test_loader = DataLoader(test_set, batch_size=args.batch_size, shuffle=False, num_workers=args.workers)
+
+            for idx, batch in enumerate(test_loader):
+                stream_1, stream_2 = batch['stream_1'], batch['stream_2'] #??? batch['{}'.format(args.test_include)]      2 stream needed in (test_prob_and_vote, test_model, test_videos_segmentation)?
+                stream_1 = Variable(stream_1.type(args.dtype))
+                stream_2 = Variable(stream_2.type(args.dtype))
+
+                output = model(stream_1, stream_2)                
+                all_probs.extend(output.data.tolist())
+            vote_strokes, mean_strokes, gaussian_strokes = compute_strokes_from_predictions(my_stroke.video_path, all_probs, args.size_data)
+
+            store_stroke_to_xml(vote_strokes, xml_files_vote)
+            store_stroke_to_xml(mean_strokes, xml_files_mean)
+            store_stroke_to_xml(gaussian_strokes, xml_files_gaussian)
+
+            if sum_stroke_scores:
+                all_probs_scoresummed = [[probs[0], probs[1:].sum()] for probs in all_probs]
+                vote_strokes_scoresummed, mean_strokes_scoresummed, gaussian_strokes_scoresummed = compute_strokes_from_predictions(my_stroke.video_path, all_probs_scoresummed, args.size_data)
+                
+                store_stroke_to_xml(vote_strokes_scoresummed, xml_files_vote_scoresummed)
+                store_stroke_to_xml(mean_strokes_scoresummed, xml_files_mean_scoresummed)
+                store_stroke_to_xml(gaussian_strokes_scoresummed, xml_files_gaussian_scoresummed)
+
+        progress_bar(len(test_list), len(test_list), 'Window Testing Done', 1, log=args.log)
+        save_xml_data(xml_files_vote, path_xml_save_vote)
+        save_xml_data(xml_files_mean, path_xml_save_mean)
+        save_xml_data(xml_files_gaussian, path_xml_save_gaussian)
+
+        if sum_stroke_scores:
+            save_xml_data(xml_files_vote_scoresummed, path_xml_save_vote_scoresummed)
+            save_xml_data(xml_files_mean_scoresummed, path_xml_save_mean_scoresummed)
+            save_xml_data(xml_files_gaussian_scoresummed, path_xml_save_gaussian_scoresummed)
+    return 1
 
 # Classification Task
 # Get Stroke labels from the directory structure and save it in the My_stroke class
@@ -493,16 +703,20 @@ def get_classification_strokes(working_folder_task):
 
     return train_strokes, validation_strokes, test_strokes
 
-def classification_task(working_folder, data_in, epochs, model_load, test_strokes_segmentation, log):
+def classification_task(working_folder, data_in, epochs, model_load, test_include, log):
     '''
     Main of the classification task
     Perform also on the detection task when the videos for segmentation are provided
     '''
+    test_strokes_segmentation = test_stream_design(working_folder, test_include)
+
     print_and_log('\nClassification Task', log=log)
     # Initialization
     reset_training(1)
     task_name = 'classificationTask' 
     task_paths= []
+
+    print('  task_name:', task_name)
     for data in data_in:
         task_paths.append(os.path.join(working_folder, data, task_name))
 
@@ -513,9 +727,11 @@ def classification_task(working_folder, data_in, epochs, model_load, test_stroke
         train_strokes_list.append(train_strokes)
         validation_strokes_list.append(validation_strokes)
         test_strokes_list.append(test_strokes)
+    print('  task_paths:', task_path)
+    print()
 
     # Model variables
-    args = My_variables(working_folder, data_in, task_name, epochs, model_load)
+    args = My_variables(working_folder, data_in, task_name, epochs, model_load, test_include)
     
     # Architecture with the output of the lenght of possible classes - (Unknown not counted)
     # make two identical models
@@ -531,10 +747,10 @@ def classification_task(working_folder, data_in, epochs, model_load, test_stroke
     # Test process
     load_checkpoint(model, args)
     # TODO make testing stuff work
-    # test_model(model, args, test_loader, list_of_strokes=LIST_OF_STROKES)
-    # test_prob_and_vote(model, args, test_strokes, list_of_strokes=LIST_OF_STROKES)
-    # if test_strokes_segmentation is not None:
-    #     test_videos_segmentation(model, args, test_strokes_segmentation, sum_stroke_scores=True)
+    test_model(model, args, test_loader, list_of_strokes=LIST_OF_STROKES)
+    test_prob_and_vote(model, args, test_strokes, list_of_strokes=LIST_OF_STROKES)
+    if test_strokes_segmentation is not None:
+        test_videos_segmentation(model, args, test_strokes_segmentation, sum_stroke_scores=True)
     return 1
 
 '''
@@ -578,11 +794,13 @@ def get_lists_annotations(task_source, task_path):
     test_strokes = get_annotations(os.path.join(task_source, 'test'), os.path.join(task_path, 'test'))
     return train_strokes, validation_strokes, test_strokes
 
-def detection_task(working_folder, source_folder, data_in, epochs, model_load, log=None):
+def detection_task(working_folder, source_folder, data_in, epochs, model_load, test_include, log):
     '''
     Main of the detection task
     Return test segmentation video to try with the classification model
     '''
+    test_strokes_segmentation = test_stream_design(working_folder, test_include)
+
     print_and_log('\nDetection Task', log=log)
     # Initialization
     reset_training(1)
@@ -607,7 +825,7 @@ def detection_task(working_folder, source_folder, data_in, epochs, model_load, l
 
 
     # Model variables
-    args = My_variables(working_folder, data_in, task_name, epochs, model_load)
+    args = My_variables(working_folder, data_in, task_name, epochs, model_load, test_include)
 
     # Architecture with the output of the lenght of possible classes - Positive and Negative
     model = make_architecture(args, 2)
@@ -622,11 +840,25 @@ def detection_task(working_folder, source_folder, data_in, epochs, model_load, l
     # Test process
     load_checkpoint(model, args)
     # TODO
-    #test_model(model, args, test_loader)
-    #test_prob_and_vote(model, args, test_strokes)
+    test_model(model, args, test_loader)
+    test_prob_and_vote(model, args, test_strokes)
     list_of_test_videos = get_videos_list(os.path.join(task_path, 'test'))
     test_videos_segmentation(model, args, list_of_test_videos)
     return 1
+
+def test_stream_design(working_folder, test_include):
+    '''
+    Sets included data for test
+    '''
+    if test_include == 'rgb':
+        test_strokes_segmentation=get_videos_list(os.path.join(working_folder, 'rgb', 'detectionTask', 'test'))
+    elif test_include == 's':
+        test_strokes_segmentation=get_videos_list(os.path.join(working_folder, 's', 'detectionTask', 'test'))
+    elif test_include == 'srgb':
+        test_strokes_segmentation=get_videos_list(os.path.join(working_folder, 'srgb', 'detectionTask', 'test'))
+    elif test_include == 'notest':
+        test_strokes_segmentation=None
+    return test_strokes_segmentation
 
 def parse_args():
     parser = argparse.ArgumentParser(description='Parse arguments defining stream information')
@@ -638,11 +870,13 @@ def parse_args():
     parser.add_argument('--stream_design','-sd',default='s',
                         choices=['s', 'srgb'],
                         help='s(skeleton); srgb(skeleton+rgb)')
-    parser.add_argument('--epochs','-e', default=1000,
+    parser.add_argument('--epochs','-e', default=500,
                         help='number of training epochs')
     #TODO: do we need model_load for c and d each? could be difficult
-    parser.add_argument('--model_load','-ml', default=None,
-                        help='load model from \'/working_folder/Models/<task_name>/model_load')
+    parser.add_argument('--model_load_c','-mlc', default=None,
+                        help='load model from \'/working_folder/Models/<task_name>/<model_load_c>')
+    parser.add_argument('--model_load_d','-mld', default=None,
+                        help='load model from \'/working_folder/Models/<task_name>/<model_load_d>')
     parser.add_argument('--test_include','-ti',default='rgb',
                         choices=['rgb', 's', 'srgb', 'notest'],
                         help='rgb(include running test on rgb data); s; srgb; notest')
@@ -654,7 +888,7 @@ def parse_args():
     
 if __name__ == "__main__":
     '''
-    Promt looks like this: python main_2.py -t <task> -m <model> -sd <stream_design> -e <epochs> -ti <test_include> -li <log_include>
+    Promt looks like this: python main_2.py -t <task> -m <model> -sd <stream_design> -e <epochs> -ml <model_load> -ti <test_include> -li <log_include>
     '''
 
     #args from terminal
@@ -665,8 +899,8 @@ if __name__ == "__main__":
     print()
     print('Start time: ', datetime.datetime.now().strftime('%d/%m/%Y %H:%M:%S'))
 
-    print('Running Modeling-Task with args: task:{}; model:{}; stream_design:{}; test_include:{}; log_include:{}'\
-        .format(args.task, args.model, args.stream_design, args.test_include, args.log_include))
+    print('Running Modeling-Task with args: task:{}; model:{}; stream_design:{}; epochs:{}; model_load_d:{}; model_load_c:{}; test_include:{}; log_include:{}'\
+        .format(args.task, args.model, args.stream_design, args.epochs, args.model_load_d, args.model_load_c, args.test_include, args.log_include))
 
     print('Working GPU device:',torch.cuda.get_device_name(torch.cuda.current_device()))
 
@@ -694,28 +928,18 @@ if __name__ == "__main__":
 
     #TODO: cant we uncomment that part? Because everything is preprocessed already. Think it would be cleaner for final submission
     # Prepare work tree (respect levels for correct extraction of the frames)
-    #create_working_tree(working_folder, source_folder, frame_width=320, log=log)
+    create_working_tree(working_folder, source_folder, args.stream_design, frame_width=320, log=log)
     print_and_log('Working tree created in %ds' % (time.time()-start_time), log=log)
-
-    #Included data for test
-    if args.test_include == 'rgb':
-        test_include=get_videos_list(os.path.join(working_folder, 'rgb', 'detectionTask', 'test'))
-    elif args.test_include == 's':
-        test_include=get_videos_list(os.path.join(working_folder, 's', 'detectionTask', 'test'))
-    elif args.test_include == 'srgb':
-        test_include=get_videos_list(os.path.join(working_folder, 'srgb', 'detectionTask', 'test'))
-    elif args.test_include == 'notest':
-        test_include=None
 
     epochs = int(args.epochs)
 
     # Tasks
     if args.task=='dc':
-        detection_task(working_folder, source_folder, data_in, epochs, args.model_load, log=log)
-        classification_task(working_folder, data_in, epochs, args.model_load, test_strokes_segmentation=test_include, log=log)
+        detection_task(working_folder, source_folder, data_in, epochs, args.model_load_d, test_include=args.test_include, log=log)
+        classification_task(working_folder, data_in, epochs, args.model_load_c, test_include=args.test_include, log=log)
     elif args.task=='d':
-        detection_task(working_folder, source_folder, data_in, epochs, args.model_load, log=log)
+        detection_task(working_folder, source_folder, data_in, epochs, args.model_load_d, test_include=args.test_include, log=log)
     elif args.task=='c':
-        classification_task(working_folder, data_in, epochs, args.model_load, test_strokes_segmentation=test_include, log=log)
+        classification_task(working_folder, data_in, epochs, args.model_load_c, test_include=args.test_include, log=log)
     
     print_and_log('All Done in %ds' % (time.time()-start_time), log=log)
