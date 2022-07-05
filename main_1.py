@@ -23,7 +23,6 @@ from utils import *
 from model import *
 from init_data import create_working_tree
 
-
 import argparse
 import sys
 
@@ -38,7 +37,7 @@ print('Nb of threads for OpenCV : ', cv2.getNumThreads())
 Model variables
 '''
 class my_variables():
-    def __init__(self, working_path, task_name, stream_design, size_data=[320,180,96], model_load=None, cuda=True, batch_size=10, workers=1, epochs=2000, lr=0.0001, nesterov=True, weight_decay=0.005, momentum=0.5):
+    def __init__(self, working_path, task_name, stream_design, epochs, model_load=None, size_data=[320,180,96], cuda=True, batch_size=10, workers=5, lr=0.0001, nesterov=True, weight_decay=0.005, momentum=0.5):
         self.size_data = np.array(size_data)
         self.cuda = cuda
         self.workers = workers
@@ -52,7 +51,7 @@ class my_variables():
         self.momentum = momentum
         if model_load is None:
             #self.model_name = os.path.join(working_path, 'Models', task_name, '%s' % (datetime.datetime.now().strftime('%Y-%m-%d_%H-%M-%S')))
-            self.model_name = os.path.join(working_path, 'Models', task_name, '%s' % (datetime.datetime.now().strftime('%Y-%m-%d_%H-%M_{}-{}'.format(1, args.stream_design))))
+            self.model_name = os.path.join(working_path, 'Models', task_name, '%s' % (datetime.datetime.now().strftime('%Y-%m-%d_%H-%M-%S_{}-{}'.format(1, args.stream_design))))
             self.train_model = True
         else:
             self.model_name = os.path.join(working_path, 'Models', task_name, model_load)
@@ -63,7 +62,7 @@ class my_variables():
             os.environ[ 'CUDA_VISIBLE_DEVICES' ] = '1'
         else:
             self.dtype = torch.FloatTensor
-        self.log = setup_logger('model_log', os.path.join(self.model_name, 'model_%s.log' % (datetime.datetime.now().strftime('%Y-%m-%d_%H-%M_{}-{}'.format(1, args.stream_design)))))
+        self.log = setup_logger('model_log', os.path.join(self.model_name, 'model_%s.log' % (datetime.datetime.now().strftime('%Y-%m-%d_%H-%M-%S_{}-{}'.format(1, args.stream_design)))))
 
         with open(os.path.join(self.model_name, 'model_info.json'), 'w') as f:
             json.dump(str(self.__dict__.copy()), f, indent=4)
@@ -431,8 +430,8 @@ def test_model(model, args, data_loader, list_of_strokes=None):
         save_xml_data(xml_files, path_xml_save)
 
 def test_prob_and_vote(model, args, test_list, list_of_strokes=None):
-    with torch.no_grad():
-        model.eval() # Set model to evaluation mode - needed for batchnorm
+    with torch.no_grad(): # turn off gradients computation (in combination with model.eval())
+        model.eval() # Set model to evaluation mode - needed for batchnorm (inactivates BatchNorm Layers)
         xml_files_vote = {}
         path_xml_save_vote = os.path.join(args.model_name, 'xml_test_vote')
         os.mkdir(path_xml_save_vote)
@@ -678,7 +677,7 @@ def get_classification_strokes(working_folder_task):
     test_strokes = [My_stroke(os.path.join(set_path, f), 0, len(os.listdir(os.path.join(set_path, f))), 'Unknown') for f in os.listdir(set_path)]
     return train_strokes, validation_strokes, test_strokes
 
-def classification_task(working_folder, stream_design, log=None, test_strokes_segmentation=None):
+def classification_task(working_folder, stream_design, epochs, model_load, test_strokes_segmentation, log):
     '''
     Main of the classification task
     Perform also on the detection task when the videos for segmentation are provided
@@ -693,7 +692,7 @@ def classification_task(working_folder, stream_design, log=None, test_strokes_se
     train_strokes, validation_strokes, test_strokes = get_classification_strokes(task_path)
 
     # Model variables
-    args = my_variables(working_folder, task_name, stream_design)
+    args = my_variables(working_folder, stream_design, task_name, epochs, model_load)
     
     ## Architecture with the output of the lenght of possible classes - (Unknown not counted)
     model = make_architecture(args, len(list_of_strokes))
@@ -754,7 +753,7 @@ def get_lists_annotations(task_source, task_path):
     test_strokes = get_annotations(os.path.join(task_source, 'test'), os.path.join(task_path, 'test'))
     return train_strokes, validation_strokes, test_strokes
 
-def detection_task(working_folder, stream_design, source_folder, log=None):
+def detection_task(working_folder, source_folder, stream_design, epochs, model_load, log=None):
     '''
     Main of the detection task
     Return test segmentation video to try with the classification model
@@ -763,14 +762,17 @@ def detection_task(working_folder, stream_design, source_folder, log=None):
     # Initialization
     reset_training(1)
     task_name = 'detectionTask'
+
+    task_source = os.path.join(source_folder, task_name)
+    print('task_source', task_source)
     task_path = os.path.join(working_folder, stream_design, task_name)
-    task_source = os.path.join(source_folder, stream_design, task_name)
+    print('task_path', task_path)
 
     # Split
     train_strokes, validation_strokes, test_strokes = get_lists_annotations(task_source, task_path)
 
     # Model variables
-    args = my_variables(working_folder, task_name, stream_design)
+    args = my_variables(working_folder, stream_design, task_name, epochs, model_load)
 
     # Architecture with the output of the lenght of possible classes - Positive and Negative
     model = make_architecture(args, 2)
@@ -792,54 +794,51 @@ def detection_task(working_folder, stream_design, source_folder, log=None):
 
 def parse_args():
     parser = argparse.ArgumentParser(description='Parse arguments defining stream information')
-    parser.add_argument('task',help='cd(classification and detection); c(classification); d(detection)')
-    #parser.add_argument('stream_size',help='one(one-stream (input from stream_design-args)); two(two-stream (input from rgb and stream_design-args))')
-    parser.add_argument('stream_design',help='rgb(base rgb); s(skeleton); srgb(skeleton rgb)')
-    parser.add_argument('test_include',help='test(include running test); notest(exclude running test)')
+    parser.add_argument('--task','-t',default='dc',
+                        choices=['dc', 'd', 'c'],
+                        help='dc(detection and classification); d(detection); c(classification)')
+    #parser.add_argument('--stream_size','-sz',default='one',help='one(one-stream (input from stream_design-args)); two(two-stream (input from rgb and stream_design-args))')
+    parser.add_argument('--model', '-m',default='V1',
+                        help='choose model (e.g. V1, V2,...)')
+    parser.add_argument('--stream_design','-sd',default='rgb',
+                        choices=['rgb', 's', 'srgb'],
+                        help='rgb(base rgb); s(skeleton); srgb(skeleton rgb)')
+    parser.add_argument('--epochs','-e', default=500,
+                        help='number of training epochs')
+    #TODO: do we need model_load for c and d each? could be difficult
+    parser.add_argument('--model_load','-ml', default=None,
+                        help='load model from \'/working_folder/Models/<task_name>/model_load')
+    parser.add_argument('--test_include','-ti',default='rgb',
+                        choices=['rgb', 's', 'srgb', 'notest'],
+                        help='rgb(include running test on rgb data); s(... on s data); srgb(... on srgb data); notest(exclude running test)')
+    parser.add_argument('--log_include','-li',default='nolog',
+                        choices=['log', 'nolog'],
+                        help='log(include writing log); nolog(exclude writing log)')
     args = parser.parse_args()
     return args
 
 if __name__ == "__main__":
+    '''
+    Promt looks like this: python main_1.py -t <task> -m <model> -sd <stream_design> -ti <test_include> -li <log_include>
+    '''
 
-    '''
-    Promt looks like this: python main_1.py <task> <stream_design> <test_include>
-    '''
-    
     #args from terminal
     args = parse_args()
 
-    task_list = ['cd', 'c', 'd']
-    stream_design_list = ['rgb', 's', 'srgb']
-    test_include_list = ['test', 'notest']
-
-    if args.task not in task_list:
-        print('Wrong \'task\'-input')
-        print(' -> break')
-        sys.exit()
-    if args.stream_design not in stream_design_list:
-        print('Wrong \'stream_design\'-input')
-        print(' -> break')
-        sys.exit()
-    if args.test_include not in test_include_list:
-        print('Wrong \'test_include\'-input')
-        print(' -> break')
-        sys.exit()
-    
     # Chrono
     start_time = time.time()
+    print()
     print('Start time: ', datetime.datetime.now().strftime('%d/%m/%Y %H:%M:%S'))
 
-    print('Running Modeling-Task with args: task:{} | stream_design:{} | test_include:{}'.format(args.task, args.stream_design, args.test_include))
-
+    print('Running Modeling-Task with args: task:{}; model:{}; stream_design:{}; epochs:{}; model_load:{}; test_include:{}; log_include:{}'\
+        .format(args.task, args.model, args.stream_design, args.epochs, args.model_load, args.test_include, args.log_include))
+        
     print('Working GPU device:',torch.cuda.get_device_name(torch.cuda.current_device()))
 
+    print()
+
     # MediaEval Task source folder
-    if args.task == 'cd':
-        source_folder = 'data'
-    elif args.task == 'c':
-        source_folder = 'data/classificationTask'
-    elif args.task == 'd':
-        source_folder = 'data/detectionTask'
+    source_folder = 'data'
 
     #folder to save images and model logs
     working_folder = 'working_folder'
@@ -847,24 +846,34 @@ if __name__ == "__main__":
     # Log file
     log_folder = os.path.join(working_folder, 'logs')
     os.makedirs(log_folder, exist_ok=True)
-    log = setup_logger('my_log', os.path.join(log_folder, '%s.log' % (datetime.datetime.now().strftime('%Y-%m-%d_%H-%M_{}-{}'.format(1, args.stream_design)))))
-    
+    if args.log_include == 'log':
+        log = setup_logger('my_log', os.path.join(log_folder, '%s.log' % (datetime.datetime.now().strftime('%Y-%m-%d_%H-%M-%S_{}-{}'.format(1, args.stream_design)))))
+    elif args.log_include == 'nolog':
+        log = None
+
     # Prepare work tree (respect levels for correct extraction of the frames)
     # make_work_tree(working_folder, source_folder, args.stream_design, frame_width=320, log=log)
     create_working_tree(working_folder, source_folder, args.stream_design, frame_width=320, log=log)
     
-    if args.test_include == 'test':
-        test_include=get_videos_list(os.path.join(working_folder, args.stream_design, 'detectionTask', 'test'))
+    #Included data for test
+    if args.test_include == 'rgb':
+        test_include=get_videos_list(os.path.join(working_folder, 'rgb', 'detectionTask', 'test'))
+    elif args.test_include == 's':
+        test_include=get_videos_list(os.path.join(working_folder, 's', 'detectionTask', 'test'))
+    elif args.test_include == 'srgb':
+        test_include=get_videos_list(os.path.join(working_folder, 'srgb', 'detectionTask', 'test'))
     elif args.test_include == 'notest':
         test_include=None
 
+    epochs = int(args.epochs)
+
     # Tasks
-    if args.task=='cd':
-        detection_task(working_folder, args.stream_design, source_folder, log=log)
-        classification_task(working_folder, args.stream_design, log=log, test_strokes_segmentation=test_include)
-    if args.task=='c':
-        classification_task(working_folder, args.stream_design, log=log, test_strokes_segmentation=test_include)
-    if args.task=='d':
-        detection_task(working_folder, args.stream_design, source_folder, log=log)
+    if args.task=='dc':
+        detection_task(working_folder, source_folder, args.stream_design, epochs, args.model_load, log=log)
+        classification_task(working_folder, args.stream_design, epochs, args.model_load, test_strokes_segmentation=test_include, log=log)
+    elif args.task=='d':
+        detection_task(working_folder, source_folder, args.stream_design, epochs, args.model_load, log=log)
+    elif args.task=='c':
+        classification_task(working_folder, args.stream_design, args.epochs, args.model_load, test_strokes_segmentation=test_include, log=log)
     
     print_and_log('All Done in %ds' % (time.time()-start_time), log=log)

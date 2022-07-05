@@ -9,8 +9,10 @@
 
 #SBATCH --gres=gpu:v100:1
 
-#SBATCH -o GIT/SportTaskME22/working_folder/slurm_logs/R-%x.%j.out
-#SBATCH -e GIT/SportTaskME22/working_folder/slurm_logs/R-%x.%j.err
+#SBATCH -o GIT/SportTaskME22/working_folder/slurm_logs/%j.%x.out
+#SBATCH -e GIT/SportTaskME22/working_folder/slurm_logs/%j.%x.err
+
+export OMP_NUM_THREADS=$SLURM_CPUS_PER_TASK
 
 export OMP_NUM_THREADS=$SLURM_CPUS_PER_TASK
 
@@ -19,4 +21,4 @@ cd GIT/SportTaskME22/
 module load Anaconda3
 conda activate open-mmlab
 
-srun python main_1.py c s notest
+srun python main_1.py -t dc -m V1 -sd srgb -e 1000 -ti notest -li nolog
