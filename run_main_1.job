@@ -1,12 +1,18 @@
 #!/bin/bash -l 
 #SBATCH --ntasks=1
-#SBATCH --time=72:00:00
-#SBATCH --partition=clara-job
-#SBATCH --gres=gpu:v100:1
-#SBATCH --mem-per-gpu=5140
+#SBATCH --cpus-per-task=5
+#SBATCH --mem=20G
+
 #SBATCH --job-name=Sporttaskme22
+#SBATCH --time=96:00:00
+#SBATCH --partition=clara-job
+
+#SBATCH --gres=gpu:v100:1
+
 #SBATCH -o GIT/SportTaskME22/working_folder/slurm_logs/R-%x.%j.out
 #SBATCH -e GIT/SportTaskME22/working_folder/slurm_logs/R-%x.%j.err
+
+export OMP_NUM_THREADS=$SLURM_CPUS_PER_TASK
 
 cd GIT/SportTaskME22/
 
