@@ -291,7 +291,7 @@ Model Architecture
 '''
 def make_architecture(args, output_size):
     print_and_log('Make Model', log=args.log)
-    model = CCNAttentionNet_TwoStream_V1(args.size_data.copy(), output_size)
+    model = CCNAttentionNetV2_TwoStream(args.size_data.copy(), output_size) #??? args.model eval(...)
     print_and_log('Model %s created' % (model.__class__.__name__), log=args.log)
     ## Use GPU
     if args.cuda:

@@ -306,7 +306,7 @@ Model Architecture
 '''
 def make_architecture(args, output_size):
     print_and_log('Make Model', log=args.log)
-    model = CCNAttentionNet_TwoStream_V1(args.size_data.copy(), output_size)
+    model = CCNAttentionNetV2_TwoStream(args.size_data.copy(), output_size)
     print_and_log('Model %s created' % (model.__class__.__name__), log=args.log)
     ## Use GPU
     if args.cuda:
@@ -315,7 +315,7 @@ def make_architecture(args, output_size):
 
 def make_architecture_test(args, output_size):
     print_and_log('Make Model', log=args.log)
-    model = CCNAttentionNet_Stream(args.size_data.copy(), output_size)
+    model = CCNAttentionNetV2_Stream(args.size_data.copy(), output_size)
     print_and_log('Model %s created' % (model.__class__.__name__), log=args.log)
     ## Use GPU
     if args.cuda:
@@ -523,6 +523,7 @@ def save_xml_data(xml_files, path_xml_save):
 Inference on test set
 '''
 def test_model(model, args, data_loader, list_of_strokes=None):
+    print('test_model starts...')
     with torch.no_grad():
         model.eval() # Set model to evaluation mode - needed for batchnorm
         xml_files = {}
@@ -544,6 +545,7 @@ def test_model(model, args, data_loader, list_of_strokes=None):
         save_xml_data(xml_files, path_xml_save)
 
 def test_prob_and_vote(model, args, test_list, list_of_strokes=None):
+    print('test_prob_and_vote starts...')
     with torch.no_grad(): # turn off gradients computation (in combination with model.eval())
         model.eval() # Set model to evaluation mode - needed for batchnorm (inactivates BatchNorm Layers)
         xml_files_vote = {}
@@ -644,6 +646,7 @@ def test_videos_segmentation(model, args, test_list, sum_stroke_scores=False):
     '''
     
     '''
+    print('test_videos_segmentation starts...')
     with torch.no_grad():
         model.eval() # Set model to evaluation mode - needed for batchnorm
         xml_files_vote = {}
@@ -874,7 +877,6 @@ def detection_task(working_folder, source_folder, data_in, epochs, model_load, t
     
     # Test process
     load_checkpoint(model, args)
-    # TODO
     test_model(model_test, args, test_loader)
     test_prob_and_vote(model_test, args, test_strokes)
     list_of_test_videos = get_videos_list(os.path.join(task_path, 'test'))

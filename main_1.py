@@ -205,7 +205,7 @@ Model Architecture
 '''
 def make_architecture(args, output_size):
     print_and_log('Make Model', log=args.log)
-    model = CCNAttentionNetV1(args.size_data.copy(), output_size)
+    model = CCNAttentionNetV2(args.size_data.copy(), output_size)
     print_and_log('Model %s created' % (model.__class__.__name__), log=args.log)
     ## Use GPU
     if args.cuda:
@@ -803,7 +803,7 @@ def parse_args():
     parser.add_argument('--stream_design','-sd',default='rgb',
                         choices=['rgb', 's', 'srgb'],
                         help='rgb(base rgb); s(skeleton); srgb(skeleton rgb)')
-    parser.add_argument('--epochs','-e', default=500,
+    parser.add_argument('--epochs','-e', default=2000,
                         help='number of training epochs')
     #TODO: do we need model_load for c and d each? could be difficult
     parser.add_argument('--model_load','-ml', default=None,
