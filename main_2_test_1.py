@@ -99,23 +99,34 @@ class My_dataset(Dataset):
         sample = {'stream_1': torch.FloatTensor(frames_1), 'stream_2': torch.FloatTensor(frames_2), 'label' : self.dataset_list_1[idx].move, 'my_stroke' : {'video_path':self.dataset_list_1[idx].video_path, 'begin':self.dataset_list_1[idx].begin, 'end':self.dataset_list_1[idx].end}}
         return sample
 
+class My_dataset_test(Dataset):
+    def __init__(self, dataset_list, size_data, augmentation=False):
+        self.dataset_list = dataset_list
+        self.size_data = size_data
+        self.augmentation = augmentation
+
+    def __len__(self):
+        return len(self.dataset_list)
+
+    def __getitem__(self, idx):
+        test_stream = get_data_test(self.dataset_list[idx].video_path, self.dataset_list[idx].begin, self.dataset_list[idx].end, self.size_data, self.augmentation)
+        sample = {'test_stream': torch.FloatTensor(test_stream), 'label' : self.dataset_list[idx].move, 'my_stroke' : {'video_path':self.dataset_list[idx].video_path, 'begin':self.dataset_list[idx].begin, 'end':self.dataset_list[idx].end}}
+        return sample
+
 class My_dataset_temporal(Dataset):
     def __init__(self, my_stroke, size_data, test_include, augmentation=False):
-        self.stroke_dataset_1 = my_stroke[0]
-        self.stroke_dataset_2 = my_stroke[1]
+        self.my_stroke = my_stroke
         self.size_data = size_data
-        self.test_include = test_include
         self.augmentation = augmentation
-        self.number_of_iteration = max(stroke_dataset_1.end-stroke_dataset_1.begin-size_data[2], 0)
+        self.number_of_iteration = max(my_stroke.end-my_stroke.begin-size_data[2], 0)
 
     def __len__(self):
         return self.number_of_iteration
 
     def __getitem__(self, idx):
-        begin = self.stroke_dataset_1.begin + idx
-        frames_1, frames_2 = get_data(self.stroke_dataset_1[idx], self.stroke_dataset_2[idx], self.size_data, self.augmentation)
-        #rgb = get_data_test(self.my_stroke.video_path, begin, begin+self.size_data[2], self.size_data, self.augmentation)
-        sample = {'stream_1': torch.FloatTensor(frames_1), 'stream_2': torch.FloatTensor(frames_2), 'label': self.stroke_dataset_1[idx].move, 'my_stroke': {'video_path': self.stroke_dataset_1[idx].video_path, 'begin': begin, 'end': begin + self.size_data[2]}}
+        begin = self.my_stroke.begin + idx
+        test_stream = get_data_test(self.my_stroke.video_path, begin, begin+self.size_data[2], self.size_data, self.augmentation)
+        sample = {'test_stream': torch.FloatTensor(test_stream), 'label': self.my_stroke.move, 'my_stroke': {'video_path': self.my_stroke.video_path, 'begin': begin, 'end': begin + self.size_data[2]}}
         return sample
 
     def my_print(self, show_option=1):
@@ -272,19 +283,23 @@ def get_data_test(data_path, begin, end, size_data, augmentation):
 '''
 Build dataloader from list of strokes
 '''
-def get_data_loaders(train_strokes, validation_strokes, test_strokes, size_data, batch_size, workers):
+def get_data_loaders(train_strokes, validation_strokes, size_data, batch_size, workers):
     # Build Dataset
     train_set = My_dataset(train_strokes, size_data)
     validation_set = My_dataset(validation_strokes, size_data)
-    test_set = My_dataset(test_strokes, size_data)
 
     # Loaders of the Datasets
     train_loader = DataLoader(train_set, batch_size=batch_size, num_workers=workers, shuffle=True)
     validation_loader = DataLoader(validation_set, batch_size=batch_size, num_workers=workers, shuffle=True)
+    return train_loader, validation_loader
+
+def get_data_loaders_test(test_strokes, size_data, batch_size, workers):
+    # Build Dataset
+    test_set = My_dataset_test(test_strokes, size_data)
+
+    # Loaders of the Datasets
     test_loader = DataLoader(test_set, batch_size=batch_size, num_workers=workers)
-    return train_loader, validation_loader, test_loader
-
-
+    return test_loader
 
 '''
 Model Architecture
@@ -292,6 +307,15 @@ Model Architecture
 def make_architecture(args, output_size):
     print_and_log('Make Model', log=args.log)
     model = CCNAttentionNet_TwoStream_V1(args.size_data.copy(), output_size)
+    print_and_log('Model %s created' % (model.__class__.__name__), log=args.log)
+    ## Use GPU
+    if args.cuda:
+        model.cuda()
+    return model
+
+def make_architecture_test(args, output_size):
+    print_and_log('Make Model', log=args.log)
+    model = CCNAttentionNet_Stream(args.size_data.copy(), output_size)
     print_and_log('Model %s created' % (model.__class__.__name__), log=args.log)
     ## Use GPU
     if args.cuda:
@@ -508,12 +532,11 @@ def test_model(model, args, data_loader, list_of_strokes=None):
         
         for batch_idx, batch in enumerate(data_loader):
             # Get batch tensor
-            stream_1, stream_2, my_stroke_list = batch['stream_1'], batch['stream_2'], batch['my_stroke']
+            test_stream, my_stroke_list = batch['test_stream'], batch['my_stroke']
             progress_bar(args.batch_size*batch_idx, N, 'Testing')
 
-            stream_1 = Variable(stream_1.type(args.dtype))
-            stream_2 = Variable(stream_2.type(args.dtype))
-            output = model(stream_1, stream_2)
+            test_stream = Variable(test_stream.type(args.dtype))
+            output = model(test_stream)
             _, predicted = torch.max(output.detach(), 1)
             store_xml_data(my_stroke_list, predicted, xml_files, list_of_strokes=list_of_strokes)
 
@@ -542,11 +565,10 @@ def test_prob_and_vote(model, args, test_list, list_of_strokes=None):
             test_loader = DataLoader(test_set, batch_size=args.batch_size, shuffle=False, num_workers=args.workers)
 
             for batch in test_loader:
-                stream_1, stream_2 = batch['stream_1'], batch['stream_2'] #??? batch['{}'.format(args.test_include)]      2 stream needed in (test_prob_and_vote, test_model, test_videos_segmentation)?
-                stream_1 = Variable(stream_1.type(args.dtype))
-                stream_2 = Variable(stream_2.type(args.dtype))
+                test_stream = batch['test_stream'] #??? batch['{}'.format(args.test_include)]      2 stream needed in (test_prob_and_vote, test_model, test_videos_segmentation)?
+                test_stream = Variable(test_stream.type(args.dtype))
 
-                output = model(stream_1, stream_2)
+                output = model(test_stream)
                 _, predicted = torch.max(output.detach(), 1)
                 
                 all_probs.extend(output.data.tolist())
@@ -649,15 +671,14 @@ def test_videos_segmentation(model, args, test_list, sum_stroke_scores=False):
             progress_bar(idx, len(test_list), 'Window Testing')
 
             all_probs = []
-            test_set = My_dataset_temporal(my_stroke, args.size_data, augmentation=False)
+            test_set = My_dataset_temporal(my_stroke, args.size_data, args.test_include, augmentation=False)
             test_loader = DataLoader(test_set, batch_size=args.batch_size, shuffle=False, num_workers=args.workers)
 
             for idx, batch in enumerate(test_loader):
-                stream_1, stream_2 = batch['stream_1'], batch['stream_2'] #??? batch['{}'.format(args.test_include)]      2 stream needed in (test_prob_and_vote, test_model, test_videos_segmentation)?
-                stream_1 = Variable(stream_1.type(args.dtype))
-                stream_2 = Variable(stream_2.type(args.dtype))
+                test_stream = batch['test_stream'] #??? batch['{}'.format(args.test_include)]      2 stream needed in (test_prob_and_vote, test_model, test_videos_segmentation)?
+                test_stream = Variable(test_stream.type(args.dtype))
 
-                output = model(stream_1, stream_2)                
+                output = model(test_stream)                
                 all_probs.extend(output.data.tolist())
             vote_strokes, mean_strokes, gaussian_strokes = compute_strokes_from_predictions(my_stroke.video_path, all_probs, args.size_data)
 
@@ -693,15 +714,21 @@ def get_classification_strokes(working_folder_task):
     set_path = os.path.join(working_folder_task, 'validation')
     validation_strokes = [My_stroke(os.path.join(set_path, action_class, f), 0, len(os.listdir(os.path.join(set_path, action_class, f))), action_class)
         for action_class in os.listdir(set_path) for f in os.listdir(os.path.join(set_path, action_class))]
+
+    # they need to be sorted as list dir gets them in different orderes
+    train_strokes.sort(key=lambda x: x.video_path, reverse=True)
+    validation_strokes.sort(key=lambda x: x.video_path, reverse=True)
+
+    return train_strokes, validation_strokes
+
+def get_classification_strokes_test(working_folder_task):
     set_path = os.path.join(working_folder_task, 'test')
     test_strokes = [My_stroke(os.path.join(set_path, f), 0, len(os.listdir(os.path.join(set_path, f))), 'Unknown') for f in os.listdir(set_path)]
     
     # they need to be sorted as list dir gets them in different orderes
-    train_strokes.sort(key=lambda x: x.video_path, reverse=True)
-    validation_strokes.sort(key=lambda x: x.video_path, reverse=True)
     test_strokes.sort(key=lambda x: x.video_path, reverse=True)
 
-    return train_strokes, validation_strokes, test_strokes
+    return test_strokes
 
 def classification_task(working_folder, data_in, epochs, model_load, test_include, log):
     '''
@@ -721,14 +748,15 @@ def classification_task(working_folder, data_in, epochs, model_load, test_includ
         task_paths.append(os.path.join(working_folder, data, task_name))
 
     # Split
-    train_strokes_list, validation_strokes_list, test_strokes_list = [], [], []
+    train_strokes_list, validation_strokes_list = [], []
     for path in task_paths:
-        train_strokes, validation_strokes, test_strokes = get_classification_strokes(path)
+        train_strokes, validation_strokes = get_classification_strokes(path)
         train_strokes_list.append(train_strokes)
         validation_strokes_list.append(validation_strokes)
-        test_strokes_list.append(test_strokes)
     print('  task_paths:', task_paths)
     print()
+
+    test_strokes = get_classification_strokes_test(task_paths[0])
 
     # Model variables
     args = My_variables(working_folder, data_in, task_name, epochs, model_load, test_include)
@@ -736,9 +764,11 @@ def classification_task(working_folder, data_in, epochs, model_load, test_includ
     # Architecture with the output of the lenght of possible classes - (Unknown not counted)
     # make two identical models
     model = make_architecture(args, len(LIST_OF_STROKES))
+    model_test = make_architecture_test(args, len(LIST_OF_STROKES))
 
     # Loaders
-    train_loader, validation_loader, test_loader = get_data_loaders(train_strokes_list, validation_strokes_list, test_strokes_list, args.size_data, args.batch_size, args.workers)
+    train_loader, validation_loader = get_data_loaders(train_strokes_list, validation_strokes_list, args.size_data, args.batch_size, args.workers)
+    test_loader = get_data_loaders_test(test_strokes, args.size_data, args.batch_size, args.workers)
 
     # Training process
     if args.train_model:
@@ -746,11 +776,10 @@ def classification_task(working_folder, data_in, epochs, model_load, test_includ
     
     # Test process
     load_checkpoint(model, args)
-    # TODO make testing stuff work
-    test_model(model, args, test_loader, list_of_strokes=LIST_OF_STROKES)
-    test_prob_and_vote(model, args, test_strokes, list_of_strokes=LIST_OF_STROKES)
+    test_model(model_test, args, test_loader, list_of_strokes=LIST_OF_STROKES)
+    test_prob_and_vote(model_test, args, test_strokes, list_of_strokes=LIST_OF_STROKES)
     if test_strokes_segmentation is not None:
-        test_videos_segmentation(model, args, test_strokes_segmentation, sum_stroke_scores=True)
+        test_videos_segmentation(model_test, args, test_strokes_segmentation) #??? , sum_stroke_scores=True throws AttributeError: 'list' object has no attribute 'sum'
     return 1
 
 '''
@@ -791,8 +820,14 @@ def get_lists_annotations(task_source, task_path):
     '''
     train_strokes = get_annotations(os.path.join(task_source, 'train'), os.path.join(task_path, 'train'))
     validation_strokes = get_annotations(os.path.join(task_source, 'validation'), os.path.join(task_path, 'validation'))
+    return train_strokes, validation_strokes
+
+def get_lists_annotations_test(task_source, task_path):
+    '''
+    Get the split of annotation and construct negative samples
+    '''
     test_strokes = get_annotations(os.path.join(task_source, 'test'), os.path.join(task_path, 'test'))
-    return train_strokes, validation_strokes, test_strokes
+    return test_strokes
 
 def detection_task(working_folder, source_folder, data_in, epochs, model_load, test_include, log):
     '''
@@ -814,24 +849,24 @@ def detection_task(working_folder, source_folder, data_in, epochs, model_load, t
         task_paths.append(task_path)
 
     # Split
-    train_strokes_list, validation_strokes_list, test_strokes_list = [], [], []
+    train_strokes_list, validation_strokes_list = [], []
     for path in task_paths:
-        train_strokes, validation_strokes, test_strokes = get_lists_annotations(task_source, path)
+        train_strokes, validation_strokes = get_lists_annotations(task_source, path)
         train_strokes_list.append(train_strokes)
         validation_strokes_list.append(validation_strokes)
-        test_strokes_list.append(test_strokes)
-    print('  task_paths:', task_path)
-    print()
 
+    test_strokes = get_lists_annotations_test(task_source, task_paths[0])
 
     # Model variables
     args = My_variables(working_folder, data_in, task_name, epochs, model_load, test_include)
 
     # Architecture with the output of the lenght of possible classes - Positive and Negative
     model = make_architecture(args, 2)
+    model_test = make_architecture_test(args, 2)
 
     # Loaders
-    train_loader, validation_loader, test_loader = get_data_loaders(train_strokes_list, validation_strokes_list, test_strokes_list, args.size_data, args.batch_size, args.workers)
+    train_loader, validation_loader = get_data_loaders(train_strokes_list, validation_strokes_list, args.size_data, args.batch_size, args.workers)
+    test_loader = get_data_loaders_test(test_strokes, args.size_data, args.batch_size, args.workers)
 
     # Training process
     if args.train_model:
@@ -840,10 +875,10 @@ def detection_task(working_folder, source_folder, data_in, epochs, model_load, t
     # Test process
     load_checkpoint(model, args)
     # TODO
-    test_model(model, args, test_loader)
-    test_prob_and_vote(model, args, test_strokes)
+    test_model(model_test, args, test_loader)
+    test_prob_and_vote(model_test, args, test_strokes)
     list_of_test_videos = get_videos_list(os.path.join(task_path, 'test'))
-    test_videos_segmentation(model, args, list_of_test_videos)
+    test_videos_segmentation(model_test, args, list_of_test_videos)
     return 1
 
 def test_stream_design(working_folder, test_include):
@@ -873,10 +908,10 @@ def parse_args():
     parser.add_argument('--epochs','-e', default=500,
                         help='number of training epochs')
     #TODO: do we need model_load for c and d each? could be difficult
-    parser.add_argument('--model_load_c','-mlc', default=None,
-                        help='load model from \'/working_folder/Models/<task_name>/<model_load_c>')
     parser.add_argument('--model_load_d','-mld', default=None,
                         help='load model from \'/working_folder/Models/<task_name>/<model_load_d>')
+    parser.add_argument('--model_load_c','-mlc', default=None,
+                        help='load model from \'/working_folder/Models/<task_name>/<model_load_c>')
     parser.add_argument('--test_include','-ti',default='rgb',
                         choices=['rgb', 's', 'srgb', 'notest'],
                         help='rgb(include running test on rgb data); s; srgb; notest')
@@ -928,7 +963,7 @@ if __name__ == "__main__":
 
     #TODO: cant we uncomment that part? Because everything is preprocessed already. Think it would be cleaner for final submission
     # Prepare work tree (respect levels for correct extraction of the frames)
-    create_working_tree(working_folder, source_folder, args.stream_design, frame_width=320, log=log)
+    #create_working_tree(working_folder, source_folder, args.stream_design, frame_width=320, log=log)
     print_and_log('Working tree created in %ds' % (time.time()-start_time), log=log)
 
     epochs = int(args.epochs)
