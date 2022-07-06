@@ -291,7 +291,7 @@ Model Architecture
 '''
 def make_architecture(args, output_size):
     print_and_log('Make Model', log=args.log)
-    model = CCNAttentionNet_TwoStream_V1(args.size_data.copy(), output_size)
+    model = CCNAttentionNetV2_TwoStream(args.size_data.copy(), output_size) #??? args.model eval(...)
     print_and_log('Model %s created' % (model.__class__.__name__), log=args.log)
     ## Use GPU
     if args.cuda:
@@ -727,7 +727,7 @@ def classification_task(working_folder, data_in, epochs, model_load, test_includ
         train_strokes_list.append(train_strokes)
         validation_strokes_list.append(validation_strokes)
         test_strokes_list.append(test_strokes)
-    print('  task_paths:', task_path)
+    print('  task_paths:', task_paths)
     print()
 
     # Model variables

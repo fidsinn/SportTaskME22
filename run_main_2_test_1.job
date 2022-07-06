@@ -1,0 +1,23 @@
+#!/bin/bash -l 
+#SBATCH --ntasks=1
+#SBATCH --cpus-per-task=5
+#SBATCH --mem=100G
+
+#SBATCH --mail-user=aq60qovu@studserv.uni-leipzig.de
+#SBATCH --mail-type=ALL
+#SBATCH --job-name=sporttask_dc_2-srgb_test1
+#SBATCH --time=7-00:00:00
+#SBATCH --partition=clara-job
+
+#SBATCH --gres=gpu:v100:1
+
+#SBATCH -o GIT/SportTaskME22/working_folder/slurm_logs/%j.%x.out
+#SBATCH -e GIT/SportTaskME22/working_folder/slurm_logs/%j.%x.err
+
+export OMP_NUM_THREADS=$SLURM_CPUS_PER_TASK
+
+cd GIT/SportTaskME22/
+
+conda activate open-mmlab
+
+srun python main_2_test_1.py -t c -m V1 -sd srgb -e 3 -mld 2022-07-04_08-43-30 -mlc 2022-07-05_14-31-30 -ti rgb -li log
