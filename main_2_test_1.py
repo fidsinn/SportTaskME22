@@ -30,7 +30,7 @@ print('Nb of threads for OpenCV : ', cv2.getNumThreads())
 Model variables
 '''
 class My_variables():
-    def __init__(self, working_path, data_in, task_name, epochs, model_load, test_include, size_data=[320,180,96], cuda=True, batch_size=10, workers=5, lr=0.0001, nesterov=True, weight_decay=0.005, momentum=0.5):
+    def __init__(self, working_path, data_in, task_name, epochs, model_load, test_include, size_data=[320,180,96], cuda=True, batch_size=10, workers=10, lr=0.0001, nesterov=True, weight_decay=0.005, momentum=0.5):
         self.data_in = data_in
         self.epochs = epochs
         self.test_include = test_include
@@ -902,7 +902,7 @@ def parse_args():
     parser.add_argument('--task','-t',default='dc',
                         choices=['dc', 'd', 'c'],
                         help='dc(detection and classification); d(detection); c(classification)')
-    parser.add_argument('--model', '-m',default='V1',
+    parser.add_argument('--model', '-m',default='V2',
                         help='choose model from model.py (e.g. V1, V2,...)')
     parser.add_argument('--stream_design','-sd',default='s',
                         choices=['s', 'srgb'],
