@@ -30,7 +30,7 @@ print('Nb of threads for OpenCV : ', cv2.getNumThreads())
 Model variables
 '''
 class My_variables():
-    def __init__(self, working_path, data_in, task_name, epochs, model_load, test_include, size_data=[320,180,96], cuda=True, batch_size=10, workers=10, lr=0.0001, nesterov=True, weight_decay=0.005, momentum=0.5):
+    def __init__(self, working_path, data_in, task_name, epochs, model_load, test_include, size_data=[320,180,96], cuda=True, batch_size=8, workers=10, lr=0.0001, nesterov=True, weight_decay=0.005, momentum=0.5):
         self.data_in = data_in
         self.epochs = epochs
         self.model = model
