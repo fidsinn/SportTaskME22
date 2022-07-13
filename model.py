@@ -402,7 +402,6 @@ class CCNAttentionNetV2_Stream(nn.Module):
         self.activation = nn.ReLU()
 
         self.linear2 = nn.Linear(size_linear_dest, n_classes)
-        self.final = nn.Softmax(1)
 
         ## Use GPU
         if cuda:
@@ -413,7 +412,7 @@ class CCNAttentionNetV2_Stream(nn.Module):
         features = features.view(-1, flatten_features(features))
         features = self.activation(self.linear1(features))
         features = self.linear2(features)
-        return self.final(features)
+        return features
 
 class CCNAttentionNetV1_TwoStream(nn.Module):
     def __init__(self, size_data, n_classes, in_dim=3, filters=[8,16,32,64,128,256], cuda=True):
@@ -437,6 +436,7 @@ class CCNAttentionNetV2_TwoStream(nn.Module):
     def __init__(self, size_data, n_classes, in_dim=3, filters=[32,64,128,256,512], cuda=True):
         super(CCNAttentionNetV2_TwoStream, self).__init__()
         
+        
         # need to vopy value of size data as model chabges  it 
         self.stream_one = CCNAttentionNetV2_Stream(size_data.copy(), n_classes)
         self.stream_two = CCNAttentionNetV2_Stream(size_data.copy(), n_classes)
@@ -450,3 +450,62 @@ class CCNAttentionNetV2_TwoStream(nn.Module):
         s1_out = self.stream_one(features_s1)
         s2_out = self.stream_two(features_s2)
         return self.final(s1_out + s2_out)
+
+
+class CCNAttentionNetV2_TwoStream_Early(nn.Module):
+    def __init__(self, size_data, n_classes, in_dim=3, filters=[32,64,128,256,512], cuda=True):
+        super(CCNAttentionNetV2_TwoStream_Early, self).__init__()
+        
+        layers_stream1 = []
+        layers_stream2 = []
+
+        for idx, out_dim in enumerate(filters):
+            # First layer, no diminution of dimension on temporal domain, double
+            if idx < 2: 
+                pool_size=(4,3,2)
+                pool_stride = [4,3,2]
+            else: # To finally have similar dimension:20x20x24
+                pool_size = [2,2,2]
+                pool_stride = [2,2,2]
+
+            layers_stream1.append(BlockConvReluPool3D(in_dim, out_dim, cuda=cuda, pool_size=pool_size, pool_stride=pool_stride))
+            layers_stream2.append(BlockConvReluPool3D(in_dim, out_dim, cuda=cuda, pool_size=pool_size, pool_stride=pool_stride))
+
+            size_data //= pool_stride
+            in_dim = out_dim
+            
+            # No attention mechanism on the two last layers (min dim = 2 in this configuration) - (W,H,T)=(5,2,3)
+            layers_stream1.append(AttentionModule3D(in_dim, in_dim, size_data, np.ceil(size_data/2), np.ceil(size_data/4), cuda=cuda))
+            layers_stream2.append(AttentionModule3D(in_dim, in_dim, size_data, np.ceil(size_data/2), np.ceil(size_data/4), cuda=cuda))
+
+        self.sequential_stream1 = nn.Sequential(*layers_stream1)
+        self.sequential_stream2 = nn.Sequential(*layers_stream2)
+        # (W,H,T)=(3,2,2) - lenght features = 6144
+        size_linear_src = size_data[0]*size_data[1]*size_data[2]*in_dim
+        size_linear_dest = size_linear_src//6
+        self.linear1_stream1 = nn.Linear(size_linear_src, size_linear_dest)
+        self.linear1_stream2 = nn.Linear(size_linear_src, size_linear_dest)
+        self.activation_stream1 = nn.ReLU()
+        self.activation_stream2 = nn.ReLU()
+
+        self.linear2 = nn.Linear(size_linear_dest, n_classes)
+        self.final = nn.Softmax(1)
+
+        ## Use GPU
+        if cuda:
+            self.cuda()
+
+    def forward(self, features_s1, features_s2):
+        features_s1 = self.sequential_stream1(features_s1)
+        features_s2 = self.sequential_stream2(features_s2)
+
+        features_s1 = features_s1.view(-1, flatten_features(features_s1))
+        features_s2 = features_s2.view(-1, flatten_features(features_s2))
+
+        features_s1 = self.activation_stream1(self.linear1_stream1(features_s1))
+        features_s2 = self.activation_stream2(self.linear1_stream2(features_s2))
+
+        features_s1 = self.linear2(features_s1)
+        features_s2 = self.linear2(features_s2)
+
+        return self.final(features_s1 + features_s2)
