@@ -30,9 +30,10 @@ print('Nb of threads for OpenCV : ', cv2.getNumThreads())
 Model variables
 '''
 class My_variables():
-    def __init__(self, working_path, data_in, task_name, epochs, model_load, test_include, size_data=[320,180,96], cuda=True, batch_size=10, workers=5, lr=0.0001, nesterov=True, weight_decay=0.005, momentum=0.5):
+    def __init__(self, working_path, data_in, task_name, epochs, model_load, model, test_include, size_data=[320,180,96], cuda=True, batch_size=10, workers=5, lr=0.0001, nesterov=True, weight_decay=0.005, momentum=0.5):
         self.data_in = data_in
         self.epochs = epochs
+        self.model = model
         self.test_include = test_include
         self.size_data = np.array(size_data)
         self.cuda = cuda
@@ -114,8 +115,10 @@ class My_dataset_test(Dataset):
         return sample
 
 class My_dataset_temporal(Dataset):
-    def __init__(self, my_stroke, size_data, test_include, augmentation=False):
+    def __init__(self, my_stroke, size_data, augmentation=False):
         self.my_stroke = my_stroke
+        #self.stroke_dataset_1 = my_stroke[0]
+        #self.stroke_dataset_2 = my_stroke[1]
         self.size_data = size_data
         self.augmentation = augmentation
         self.number_of_iteration = max(my_stroke.end-my_stroke.begin-size_data[2], 0)
@@ -125,8 +128,11 @@ class My_dataset_temporal(Dataset):
 
     def __getitem__(self, idx):
         begin = self.my_stroke.begin + idx
-        test_stream = get_data_test(self.my_stroke.video_path, begin, begin+self.size_data[2], self.size_data, self.augmentation)
-        sample = {'test_stream': torch.FloatTensor(test_stream), 'label': self.my_stroke.move, 'my_stroke': {'video_path': self.my_stroke.video_path, 'begin': begin, 'end': begin + self.size_data[2]}}
+        #frames_1, frames_2 = get_data(self.stroke_dataset_1[idx], self.stroke_dataset_2[idx], self.size_data, self.augmentation)
+        rgb = get_data(self.my_stroke.video_path, begin, begin+self.size_data[2], self.size_data, self.augmentation)
+        #rgb = get_data_test(self.my_stroke.video_path, begin, begin+self.size_data[2], self.size_data, self.augmentation)
+        #sample = {'stream_1': torch.FloatTensor(frames_1), 'stream_2': torch.FloatTensor(frames_2), 'label': self.stroke_dataset_1[idx].move, 'my_stroke': {'video_path': self.stroke_dataset_1[idx].video_path, 'begin': begin, 'end': begin + self.size_data[2]}}
+        sample = {'rgb': torch.FloatTensor(rgb), 'label': self.my_stroke.move, 'my_stroke': {'video_path': self.my_stroke.video_path, 'begin': begin, 'end': begin + self.size_data[2]}}
         return sample
 
     def my_print(self, show_option=1):
@@ -306,7 +312,9 @@ Model Architecture
 '''
 def make_architecture(args, output_size):
     print_and_log('Make Model', log=args.log)
-    model = CCNAttentionNetV2_TwoStream(args.size_data.copy(), output_size)
+    model = 'CCNAttentionNet' + args.model + '_TwoStream(args.size_data.copy(), output_size)'
+    #model = CCNAttentionNetV2_TwoStream(args.size_data.copy(), output_size)
+    model = eval(model)
     print_and_log('Model %s created' % (model.__class__.__name__), log=args.log)
     ## Use GPU
     if args.cuda:
@@ -315,7 +323,9 @@ def make_architecture(args, output_size):
 
 def make_architecture_test(args, output_size):
     print_and_log('Make Model', log=args.log)
-    model = CCNAttentionNetV2_Stream(args.size_data.copy(), output_size)
+    model = 'CCNAttentionNet' + args.model + '_Stream(args.size_data.copy(), output_size)'
+    #model = CCNAttentionNetV2_Stream(args.size_data.copy(), output_size)
+    model = eval(model)
     print_and_log('Model %s created' % (model.__class__.__name__), log=args.log)
     ## Use GPU
     if args.cuda:
@@ -733,7 +743,7 @@ def get_classification_strokes_test(working_folder_task):
 
     return test_strokes
 
-def classification_task(working_folder, data_in, epochs, model_load, test_include, log):
+def classification_task(working_folder, data_in, epochs, model_load, model, test_include, log):
     '''
     Main of the classification task
     Perform also on the detection task when the videos for segmentation are provided
@@ -762,7 +772,7 @@ def classification_task(working_folder, data_in, epochs, model_load, test_includ
     test_strokes = get_classification_strokes_test(task_paths[0])
 
     # Model variables
-    args = My_variables(working_folder, data_in, task_name, epochs, model_load, test_include)
+    args = My_variables(working_folder, data_in, task_name, epochs, model_load, model, test_include)
     
     # Architecture with the output of the lenght of possible classes - (Unknown not counted)
     # make two identical models
@@ -781,8 +791,9 @@ def classification_task(working_folder, data_in, epochs, model_load, test_includ
     load_checkpoint(model, args)
     test_model(model_test, args, test_loader, list_of_strokes=LIST_OF_STROKES)
     test_prob_and_vote(model_test, args, test_strokes, list_of_strokes=LIST_OF_STROKES)
-    if test_strokes_segmentation is not None:
-        test_videos_segmentation(model_test, args, test_strokes_segmentation) #??? , sum_stroke_scores=True throws AttributeError: 'list' object has no attribute 'sum'
+    #if test_strokes_segmentation is not None:  #??? what is task_path here?
+    #    test_videos_segmentation(model_test, args, test_strokes_segmentation) #??? , sum_stroke_scores=True throws AttributeError: 'list' object has no attribute 'sum'
+    #??? what is task_path here?
     return 1
 
 '''
@@ -832,7 +843,7 @@ def get_lists_annotations_test(task_source, task_path):
     test_strokes = get_annotations(os.path.join(task_source, 'test'), os.path.join(task_path, 'test'))
     return test_strokes
 
-def detection_task(working_folder, source_folder, data_in, epochs, model_load, test_include, log):
+def detection_task(working_folder, source_folder, data_in, epochs, model_load, model, test_include, log):
     '''
     Main of the detection task
     Return test segmentation video to try with the classification model
@@ -861,7 +872,7 @@ def detection_task(working_folder, source_folder, data_in, epochs, model_load, t
     test_strokes = get_lists_annotations_test(task_source, task_paths[0])
 
     # Model variables
-    args = My_variables(working_folder, data_in, task_name, epochs, model_load, test_include)
+    args = My_variables(working_folder, data_in, task_name, epochs, model_load, model, test_include)
 
     # Architecture with the output of the lenght of possible classes - Positive and Negative
     model = make_architecture(args, 2)
@@ -879,8 +890,8 @@ def detection_task(working_folder, source_folder, data_in, epochs, model_load, t
     load_checkpoint(model, args)
     test_model(model_test, args, test_loader)
     test_prob_and_vote(model_test, args, test_strokes)
-    list_of_test_videos = get_videos_list(os.path.join(task_path, 'test'))
-    test_videos_segmentation(model_test, args, list_of_test_videos)
+    #list_of_test_videos = get_videos_list(os.path.join(task_path, 'test')) #??? what is task_path here?
+    #test_videos_segmentation(model_test, args, list_of_test_videos) #??? what is task_path here?
     return 1
 
 def test_stream_design(working_folder, test_include):
@@ -904,12 +915,14 @@ def parse_args():
                         help='dc(detection and classification); d(detection); c(classification)')
     parser.add_argument('--model', '-m',default='V1',
                         help='choose model from model.py (e.g. V1, V2,...)')
-    parser.add_argument('--stream_design','-sd',default='s',
-                        choices=['s', 'srgb'],
-                        help='s(skeleton); srgb(skeleton+rgb)')
-    parser.add_argument('--epochs','-e', default=500,
+    parser.add_argument('--stream_design1','-sd1',default='rgb',
+                        choices=['rgb', 's', 'srgb'],
+                        help='rgb; s(skeleton); srgb(skeleton+rgb)')
+    parser.add_argument('--stream_design2','-sd2',default='rgb',
+                        choices=['rgb', 's', 'srgb'],
+                        help='rgb; s(skeleton); srgb(skeleton+rgb)')
+    parser.add_argument('--epochs','-e', default=2000,
                         help='number of training epochs')
-    #TODO: do we need model_load for c and d each? could be difficult
     parser.add_argument('--model_load_d','-mld', default=None,
                         help='load model from \'/working_folder/Models/<task_name>/<model_load_d>')
     parser.add_argument('--model_load_c','-mlc', default=None,
@@ -925,7 +938,7 @@ def parse_args():
     
 if __name__ == "__main__":
     '''
-    Promt looks like this: python main_2.py -t <task> -m <model> -sd <stream_design> -e <epochs> -ml <model_load> -ti <test_include> -li <log_include>
+    Promt looks like this: python main_2.py -t <task> -m <model> -sd1 <stream_design1> -sd2 <stream_design2> -e <epochs> -ml <model_load> -ti <test_include> -li <log_include>
     '''
 
     #args from terminal
@@ -936,8 +949,8 @@ if __name__ == "__main__":
     print()
     print('Start time: ', datetime.datetime.now().strftime('%d/%m/%Y %H:%M:%S'))
 
-    print('Running Modeling-Task with args: task:{}; model:{}; stream_design:{}; epochs:{}; model_load_d:{}; model_load_c:{}; test_include:{}; log_include:{}'\
-        .format(args.task, args.model, args.stream_design, args.epochs, args.model_load_d, args.model_load_c, args.test_include, args.log_include))
+    print('Running Modeling-Task with args: task:{}; model:{}; stream_design1:{}; stream_design2:{}; epochs:{}; model_load_d:{}; model_load_c:{}; test_include:{}; log_include:{}'\
+        .format(args.task, args.model, args.stream_design1, args.stream_design2, args.epochs, args.model_load_d, args.model_load_c, args.test_include, args.log_include))
 
     print('Working GPU device:',torch.cuda.get_device_name(torch.cuda.current_device()))
 
@@ -949,34 +962,34 @@ if __name__ == "__main__":
     # Folder to save work
     working_folder = 'working_folder'
 
-    #second stream design (besides rgb)
-    if args.stream_design == 's':
-        data_in = ['rgb', 's']
-    elif args.stream_design == 'srgb':
-        data_in = ['rgb', 'srgb']
+    #first and second stream design
+    if args.stream_design1 == args.stream_design2:
+        print('Both streams are same:', args.stream_design1)
+    else:
+        data_in = [args.stream_design1, args.stream_design2]
     
     # Log file
     log_folder = os.path.join(working_folder, 'logs')
     os.makedirs(log_folder, exist_ok=True)
     if args.log_include == 'log':
-        log = setup_logger('my_log', os.path.join(log_folder, '%s.log' % (datetime.datetime.now().strftime('%Y-%m-%d_%H-%M-%S_{}-{}'.format(args.model, args.stream_design)))))
+        log = setup_logger('my_log', os.path.join(log_folder, '%s.log' % (datetime.datetime.now().strftime('%Y-%m-%d_%H-%M-%S_{}-{}-{}'.format(args.model, args.stream_design1, args.stream_design2)))))
     elif args.log_include == 'nolog':
         log = None
 
     #TODO: cant we uncomment that part? Because everything is preprocessed already. Think it would be cleaner for final submission
     # Prepare work tree (respect levels for correct extraction of the frames)
-    #create_working_tree(working_folder, source_folder, args.stream_design, frame_width=320, log=log)
+    #create_working_tree(working_folder, source_folder, args.stream_design2, frame_width=320, log=log)
     print_and_log('Working tree created in %ds' % (time.time()-start_time), log=log)
 
     epochs = int(args.epochs)
 
     # Tasks
     if args.task=='dc':
-        detection_task(working_folder, source_folder, data_in, epochs, args.model_load_d, test_include=args.test_include, log=log)
-        classification_task(working_folder, data_in, epochs, args.model_load_c, test_include=args.test_include, log=log)
+        detection_task(working_folder, source_folder, data_in, epochs, args.model_load_d, args.model, test_include=args.test_include, log=log)
+        classification_task(working_folder, data_in, epochs, args.model_load_c, args.model, test_include=args.test_include, log=log)
     elif args.task=='d':
-        detection_task(working_folder, source_folder, data_in, epochs, args.model_load_d, test_include=args.test_include, log=log)
+        detection_task(working_folder, source_folder, data_in, epochs, args.model_load_d, args.model, test_include=args.test_include, log=log)
     elif args.task=='c':
-        classification_task(working_folder, data_in, epochs, args.model_load_c, test_include=args.test_include, log=log)
+        classification_task(working_folder, data_in, epochs, args.model_load_c, args.model, test_include=args.test_include, log=log)
     
     print_and_log('All Done in %ds' % (time.time()-start_time), log=log)
