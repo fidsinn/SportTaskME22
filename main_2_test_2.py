@@ -30,7 +30,7 @@ print('Nb of threads for OpenCV : ', cv2.getNumThreads())
 Model variables
 '''
 class My_variables():
-    def __init__(self, working_path, data_in, task_name, epochs, model_load, model, size_data=[320,180,96], cuda=True, batch_size=10, workers=5, lr=0.0001, nesterov=True, weight_decay=0.005, momentum=0.5):
+    def __init__(self, working_path, data_in, task_name, epochs, model_load, model, size_data=[320,180,96], cuda=True, batch_size=8, workers=5, lr=0.0001, nesterov=True, weight_decay=0.005, momentum=0.5):
         self.data_in = data_in
         self.epochs = epochs
         self.model = model
@@ -99,30 +99,9 @@ class My_dataset(Dataset):
         return len(self.dataset_list_1)
 
     def __getitem__(self, idx):
-        frames_1, frames_2 = get_data(self.dataset_list_1[idx], self.dataset_list_2[idx], self.size_data, self.augmentation) #??? where is the .begin and .end from original main?
+        frames_1, frames_2 = get_data(self.dataset_list_1[idx].video_path, self.dataset_list_2[idx].video_path, self.dataset_list_2[idx].begin, self.dataset_list_2[idx].end, self.size_data, self.augmentation) #??? where is the .begin and .end from original main?
         sample = {'stream_1': torch.FloatTensor(frames_1), 'stream_2': torch.FloatTensor(frames_2), 'label' : self.dataset_list_1[idx].move, 'my_stroke' : {'video_path':self.dataset_list_1[idx].video_path, 'begin':self.dataset_list_1[idx].begin, 'end':self.dataset_list_1[idx].end}}
         return sample
-
-'''
-class My_dataset_temporal(Dataset):
-    def __init__(self, my_stroke, size_data, augmentation=False):
-        self.my_stroke = my_stroke
-        self.size_data = size_data
-        self.augmentation = augmentation
-        self.number_of_iteration = max(my_stroke.end-my_stroke.begin-size_data[2], 0)
-
-    def __len__(self):
-        return self.number_of_iteration
-
-    def __getitem__(self, idx):
-        begin = self.my_stroke.begin + idx
-        rgb = get_data(self.my_stroke.video_path, begin, begin+self.size_data[2], self.size_data, self.augmentation)
-        sample = {'rgb': torch.FloatTensor(rgb), 'label': self.my_stroke.move, 'my_stroke': {'video_path': self.my_stroke.video_path, 'begin': begin, 'end': begin + self.size_data[2]}}
-        return sample
-
-    def my_print(self, show_option=1):
-        self.annotation.my_print()
-'''
 
 class My_dataset_temporal(Dataset):
     def __init__(self, my_stroke, size_data, augmentation=False):
@@ -138,38 +117,9 @@ class My_dataset_temporal(Dataset):
 
     def __getitem__(self, idx):
         begin = self.stroke_dataset_1.begin + idx
-        frames_1, frames_2 = get_data(self.stroke_dataset_1.video_path, self.stroke_dataset_2.video_path, self.size_data, self.augmentation)
-        #frames_1, frames_2 = get_data_test(self.stroke_dataset_1.video_path, self.stroke_dataset_2.video_path, begin, begin+self.size_data[2], self.size_data, self.augmentation)
-        #frames_1 = get_data(self.my_stroke[0].video_path, begin, begin+self.size_data[2], self.size_data, self.augmentation)
-        #frames_2 = get_data(self.my_stroke[1].video_path, begin, begin+self.size_data[2], self.size_data, self.augmentation)
-        #rgb = get_data_test(self.my_stroke.video_path, begin, begin+self.size_data[2], self.size_data, self.augmentation)
-        #sample = {'stream_1': torch.FloatTensor(frames_1), 'stream_2': torch.FloatTensor(frames_2), 'label': self.stroke_dataset_1[idx].move, 'my_stroke': {'video_path': self.stroke_dataset_1[idx].video_path, 'begin': begin, 'end': begin + self.size_data[2]}}
-        sample = {'stream_1': torch.FloatTensor(frames_1), 'stream_2': torch.FloatTensor(frames_2), 'label': self.stroke_dataset_1[idx].move, 'my_stroke': {'video_path': self.stroke_dataset_1.video_path, 'begin': begin, 'end': begin + self.size_data[2]}}
+        frames_1, frames_2 = get_data(self.stroke_dataset_1.video_path, self.stroke_dataset_2.video_path, begin, begin + self.size_data[2], self.size_data, self.augmentation)
+        sample = {'stream_1': torch.FloatTensor(frames_1), 'stream_2': torch.FloatTensor(frames_2), 'label': self.stroke_dataset_1.move, 'my_stroke': {'video_path': self.stroke_dataset_1.video_path, 'begin': begin, 'end': begin + self.size_data[2]}}
         return sample
-
-'''
-class My_dataset_temporal(Dataset):
-    def __init__(self, my_stroke, size_data, augmentation=False):
-        self.my_stroke = my_stroke
-        self.size_data = size_data
-        self.augmentation = augmentation
-        self.number_of_iteration = max(my_stroke.end-my_stroke.begin-size_data[2], 0)
-
-    def __len__(self):
-        return self.number_of_iteration
-
-    def __getitem__(self, idx):
-        begin = self.my_stroke.begin + idx
-        rgb = get_data(self.my_stroke.video_path, begin, begin+self.size_data[2], self.size_data, self.augmentation)
-        sample = {'rgb': torch.FloatTensor(rgb), 'label': self.my_stroke.move, 'my_stroke': {'video_path': self.my_stroke.video_path, 'begin': begin, 'end': begin + self.size_data[2]}}
-        return sample
-
-    def my_print(self, show_option=1):
-        self.annotation.my_print()
-
-    def my_print(self, show_option=1):
-        self.annotation.my_print()
-'''
 
 # Global vars
 '''
@@ -257,34 +207,32 @@ def apply_augmentation(data, zoom, R_matrix, flip):
 
 
 #  get data and apply some augmentaion if specified
-def get_data(data_1, data_2, size_data, augmentation):
+def get_data(data_1, data_2, begin, end, size_data, augmentation):
     frame_data_1 = []
     frame_data_2 = []
-    begin = data_1.begin
-    end = data_1.end
     if augmentation:
         angle, zoom, tx, ty, flip, begin = get_augmentation_parameters(begin, end, size_data)
         R_matrix = cv2.getRotationMatrix2D((size_data[0]//2-tx, size_data[1]//2-ty), angle, 1)
     else:
         angle, zoom, tx, ty, flip, begin = 0, 1, 0, 0, 0, max((begin+end-size_data[2])//2,0)
     
-    max_frame_number = len(os.listdir(data_1.video_path))-1
+    max_frame_number = len(os.listdir(data_1))-1
 
     for frame_number in range(begin, begin + size_data[2]):
         if frame_number > max_frame_number:
             frame_number = max_frame_number
         try:
-            frame_1 = cv2.imread(os.path.join(data_1.video_path, '%08d.png' % frame_number))
+            frame_1 = cv2.imread(os.path.join(data_1, '%08d.png' % frame_number))
             frame_1 = cv2.resize(frame_1, (size_data[0], size_data[1])).astype(float) / 255
 
-            frame_2 = cv2.imread(os.path.join(data_2.video_path, '%08d.png' % frame_number))
+            frame_2 = cv2.imread(os.path.join(data_2, '%08d.png' % frame_number))
             frame_2 = cv2.resize(frame_2, (size_data[0], size_data[1])).astype(float) / 255
 
             if augmentation:
                 frame_1 = apply_augmentation(frame_1, zoom, R_matrix, flip)
                 frame_2 = apply_augmentation(frame_2, zoom, R_matrix, flip)
         except:
-            raise ValueError('Problem with %s or %s begin %d size %s' % (os.path.join(data_1.video_path, '%08d.png' % frame_number),os.path.join(data_2.video_path, '%08d.png' % frame_number), begin, str(size_data)))
+            raise ValueError('Problem with %s or %s begin %d size %s' % (os.path.join(data_1, '%08d.png' % frame_number),os.path.join(data_2, '%08d.png' % frame_number), begin, str(size_data)))
         frame_data_1.append(cv2.split(frame_1))
         frame_data_2.append(cv2.split(frame_2))
     # To match size_data variable, transposition is needed. From (T,C,H,W) to (C,W,H,T).
@@ -329,33 +277,6 @@ def get_data_test(data_1, data_2, begin, end, size_data, augmentation):
     frame_data_1 = np.transpose(frame_data_1, (1, 3, 2, 0))
     frame_data_2 = np.transpose(frame_data_2, (1, 3, 2, 0))
     return frame_data_1, frame_data_2
-
-'''
-def get_data_test(data_path, begin, end, size_data, augmentation):
-    test_stream_data = []
-    if augmentation:
-        angle, zoom, tx, ty, flip, begin = get_augmentation_parameters(begin, end, size_data)
-        R_matrix = cv2.getRotationMatrix2D((size_data[0]//2-tx, size_data[1]//2-ty), angle, 1)
-    else:
-        angle, zoom, tx, ty, flip, begin = 0, 1, 0, 0, 0, max((begin+end-size_data[2])//2,0)
-    
-    max_frame_number = len(os.listdir(data_path))-1
-
-    for frame_number in range(begin, begin + size_data[2]):
-        if frame_number > max_frame_number:
-            frame_number = max_frame_number
-        try:
-            test_stream = cv2.imread(os.path.join(data_path, '%08d.png' % frame_number))
-            test_stream = cv2.resize(test_stream, (size_data[0], size_data[1])).astype(float) / 255
-            if augmentation:
-                test_stream = apply_augmentation(test_stream, zoom, R_matrix, flip)
-        except:
-            raise ValueError('Problem with %s begin %d size %s' % (os.path.join(data_path, '%08d.png' % frame_number), begin, str(size_data)))
-        test_stream_data.append(cv2.split(test_stream))
-    # To match size_data variable, transposition is needed. From (T,C,H,W) to (C,W,H,T).
-    test_stream_data = np.transpose(test_stream_data, (1, 3, 2, 0))
-    return test_stream_data
-'''
 
 '''
 Build dataloader from list of strokes
@@ -611,64 +532,6 @@ def test_model(model, args, data_loader, list_of_strokes=None):
         progress_bar(N, N, 'Test done', 1, log=args.log)
         save_xml_data(xml_files, path_xml_save)
 
-'''
-def test_prob_and_vote(model, args, test_list, list_of_strokes=None):
-    with torch.no_grad():
-        print('test_prob_and_vote starts...')
-        model.eval() # Set model to evaluation mode - needed for batchnorm
-        xml_files_vote = {}
-        path_xml_save_vote = os.path.join(args.model_name, 'xml_test_vote')
-        if not os.path.isdir(path_xml_save_vote):
-            os.mkdir(path_xml_save_vote)
-        #else:
-        #    if not os.listdir(path_xml_save_vote):
-        #        os.rmdir(path_xml_save_vote)
-        xml_files_mean = {}
-        path_xml_save_mean = os.path.join(args.model_name, 'xml_test_mean')
-        if not os.path.isdir(path_xml_save_mean):
-            os.mkdir(path_xml_save_mean)
-        xml_files_gaussian = {}
-        path_xml_save_gaussian = os.path.join(args.model_name, 'xml_test_gaussian')
-        if not os.path.isdir(path_xml_save_gaussian):
-            os.mkdir(path_xml_save_gaussian)
-
-        for idx, my_stroke in enumerate(test_list):
-            progress_bar(idx, len(test_list), 'Window Testing')
-
-            predictions = []
-            all_probs = []
-            test_set = My_dataset_temporal(my_stroke, args.size_data, augmentation=False)
-            test_loader = DataLoader(test_set, batch_size=args.batch_size, shuffle=False, num_workers=args.workers)
-
-            for batch in test_loader:
-                rgb = batch['rgb']
-                rgb = Variable(rgb.type(args.dtype))
-
-                output = model(rgb)
-                _, predicted = torch.max(output.detach(), 1)
-                
-                all_probs.extend(output.data.tolist())
-                predictions.extend(predicted.tolist())
-
-            middle = int(len(all_probs)/2)
-            prob_gaussian = cv2.GaussianBlur(np.array(all_probs), (1, 2*middle+1), 0) # sigma = 0.3*((ksize-1)*0.5 - 1) + 0.8
-            prob_mean = np.mean(all_probs,0)
-
-            # Store results in xml files
-            my_stroke.move = max(set(predictions), key=predictions.count)
-            store_stroke_to_xml([my_stroke], xml_files_vote, list_of_strokes)
-            my_stroke.move = prob_mean.tolist().index(max(prob_mean))
-            store_stroke_to_xml([my_stroke], xml_files_mean, list_of_strokes)
-            my_stroke.move = prob_gaussian[middle].tolist().index(max(prob_gaussian[middle]))
-            store_stroke_to_xml([my_stroke], xml_files_gaussian, list_of_strokes)
-
-        progress_bar(len(test_list), len(test_list), 'Window Testing Done', 1, log=args.log)
-        save_xml_data(xml_files_vote, path_xml_save_vote)
-        save_xml_data(xml_files_mean, path_xml_save_mean)
-        save_xml_data(xml_files_gaussian, path_xml_save_gaussian)
-    return 1
-'''
-
 def test_prob_and_vote(model, args, test_list, list_of_strokes=None):
     with torch.no_grad(): # turn off gradients computation (in combination with model.eval())
         print('test_prob_and_vote starts...')
@@ -697,10 +560,8 @@ def test_prob_and_vote(model, args, test_list, list_of_strokes=None):
             predictions = []
             all_probs = []
             test_set = My_dataset_temporal([stroke[0], stroke[1]], args.size_data, augmentation=False)
-            print('test_set', test_list_z) #!!
 
             test_loader = DataLoader(test_set, batch_size=args.batch_size, shuffle=False, num_workers=args.workers)
-            print('test_loader', test_loader) #!!
 
             for batch in test_loader:
                 stream_1, stream_2 = batch['stream_1'], batch['stream_2']
@@ -718,12 +579,12 @@ def test_prob_and_vote(model, args, test_list, list_of_strokes=None):
             prob_mean = np.mean(all_probs,0)
 
             # Store results in xml files
-            my_stroke.move = max(set(predictions), key=predictions.count)
-            store_stroke_to_xml([my_stroke], xml_files_vote, list_of_strokes)
-            my_stroke.move = prob_mean.tolist().index(max(prob_mean))
-            store_stroke_to_xml([my_stroke], xml_files_mean, list_of_strokes)
-            my_stroke.move = prob_gaussian[middle].tolist().index(max(prob_gaussian[middle]))
-            store_stroke_to_xml([my_stroke], xml_files_gaussian, list_of_strokes)
+            stroke[0].move = max(set(predictions), key=predictions.count)
+            store_stroke_to_xml([stroke[0]], xml_files_vote, list_of_strokes)
+            stroke[0].move = prob_mean.tolist().index(max(prob_mean))
+            store_stroke_to_xml([stroke[0]], xml_files_mean, list_of_strokes)
+            stroke[0].move = prob_gaussian[middle].tolist().index(max(prob_gaussian[middle]))
+            store_stroke_to_xml([stroke[0]], xml_files_gaussian, list_of_strokes)
 
         progress_bar(len(test_list[0]), len(test_list[0]), 'Window Testing Done', 1, log=args.log)
         save_xml_data(xml_files_vote, path_xml_save_vote)
@@ -908,10 +769,8 @@ def classification_task(working_folder, data_in, epochs, model_load, model, test
     
     # Test process
     load_checkpoint(model, args)
-    # TODO make testing stuff work
-    #test_model(model, args, test_loader, list_of_strokes=LIST_OF_STROKES)
-    test_prob_and_vote(model, args, test_loader, list_of_strokes=LIST_OF_STROKES)
-    #test_prob_and_vote(model, args, test_strokes_list, list_of_strokes=LIST_OF_STROKES)
+    test_model(model, args, test_loader, list_of_strokes=LIST_OF_STROKES)
+    test_prob_and_vote(model, args, test_strokes_list, list_of_strokes=LIST_OF_STROKES)
     #if test_strokes_segmentation is not None: #??? what is task_path here?
     #    test_videos_segmentation(model, args, test_strokes_segmentation, sum_stroke_scores=True) #??? what is task_path here?
     return 1
@@ -1002,7 +861,6 @@ def detection_task(working_folder, source_folder, data_in, epochs, model_load, m
     
     # Test process
     load_checkpoint(model, args)
-    # TODO
     test_model(model, args, test_loader)
     test_prob_and_vote(model, args, test_strokes_list)
     #list_of_test_videos = get_videos_list(os.path.join(task_path, 'test')) #??? what is task_path here?
@@ -1090,7 +948,7 @@ if __name__ == "__main__":
 
     #TODO: cant we uncomment that part? Because everything is preprocessed already. Think it would be cleaner for final submission
     # Prepare work tree (respect levels for correct extraction of the frames)
-    #create_working_tree(working_folder, source_folder, args.stream_design2, frame_width=320, log=log)
+    # create_working_tree(working_folder, source_folder, args.stream_design2, frame_width=320, log=log)
     print_and_log('Working tree created in %ds' % (time.time()-start_time), log=log)
 
     epochs = int(args.epochs)
