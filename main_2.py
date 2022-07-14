@@ -530,6 +530,7 @@ def test_model(model, args, data_loader, list_of_strokes=None):
             store_xml_data(my_stroke_list, predicted, xml_files, list_of_strokes=list_of_strokes)
 
         progress_bar(N, N, 'Test done', 1, log=args.log)
+        print('test_model done at: ', datetime.datetime.now().strftime('%d/%m/%Y %H:%M:%S'))
         save_xml_data(xml_files, path_xml_save)
 
 def test_prob_and_vote(model, args, test_list, list_of_strokes=None):
@@ -540,9 +541,6 @@ def test_prob_and_vote(model, args, test_list, list_of_strokes=None):
         path_xml_save_vote = os.path.join(args.model_name, 'xml_test_vote')
         if not os.path.isdir(path_xml_save_vote):
             os.mkdir(path_xml_save_vote)
-        #else:
-        #    if not os.listdir(path_xml_save_vote):
-        #        os.rmdir(path_xml_save_vote)
         xml_files_mean = {}
         path_xml_save_mean = os.path.join(args.model_name, 'xml_test_mean')
         if not os.path.isdir(path_xml_save_mean):
@@ -560,7 +558,6 @@ def test_prob_and_vote(model, args, test_list, list_of_strokes=None):
             predictions = []
             all_probs = []
             test_set = My_dataset_temporal([stroke[0], stroke[1]], args.size_data, augmentation=False)
-
             test_loader = DataLoader(test_set, batch_size=args.batch_size, shuffle=False, num_workers=args.workers)
 
             for batch in test_loader:
@@ -590,6 +587,7 @@ def test_prob_and_vote(model, args, test_list, list_of_strokes=None):
         save_xml_data(xml_files_vote, path_xml_save_vote)
         save_xml_data(xml_files_mean, path_xml_save_mean)
         save_xml_data(xml_files_gaussian, path_xml_save_gaussian)
+        print('test_prob_and_vote done at: ', datetime.datetime.now().strftime('%d/%m/%Y %H:%M:%S'))
     return 1
 
 '''
@@ -649,30 +647,38 @@ def test_videos_segmentation(model, args, test_list, sum_stroke_scores=False):
         model.eval() # Set model to evaluation mode - needed for batchnorm
         xml_files_vote = {}
         path_xml_save_vote = os.path.join(args.model_name, 'xml_testseg_vote')
-        os.mkdir(path_xml_save_vote)
+        if not os.path.isdir(path_xml_save_vote):
+            os.mkdir(path_xml_save_vote)
         xml_files_mean = {}
         path_xml_save_mean = os.path.join(args.model_name, 'xml_testseg_mean')
-        os.mkdir(path_xml_save_mean)
+        if not os.path.isdir(path_xml_save_mean):
+            os.mkdir(path_xml_save_mean)
         xml_files_gaussian = {}
         path_xml_save_gaussian = os.path.join(args.model_name, 'xml_testseg_gaussian')
-        os.mkdir(path_xml_save_gaussian)
+        if not os.path.isdir(path_xml_save_gaussian):
+            os.mkdir(path_xml_save_gaussian)
 
         if sum_stroke_scores:
             xml_files_vote_scoresummed = {}
             path_xml_save_vote_scoresummed = os.path.join(args.model_name, 'xml_testseg_vote_scoresummed')
-            os.mkdir(path_xml_save_vote_scoresummed)
+            if not os.path.isdir(path_xml_save_vote_scoresummed):
+                os.mkdir(path_xml_save_vote_scoresummed)
             xml_files_mean_scoresummed = {}
             path_xml_save_mean_scoresummed = os.path.join(args.model_name, 'xml_testseg_mean_scoresummed')
-            os.mkdir(path_xml_save_mean_scoresummed)
+            if not os.path.isdir(path_xml_save_mean_scoresummed):
+                os.mkdir(path_xml_save_mean_scoresummed)
             xml_files_gaussian_scoresummed = {}
             path_xml_save_gaussian_scoresummed = os.path.join(args.model_name, 'xml_testseg_gaussian_scoresummed')
-            os.mkdir(path_xml_save_gaussian_scoresummed)
+            if not os.path.isdir(path_xml_save_gaussian_scoresummed):
+                os.mkdir(path_xml_save_gaussian_scoresummed)
 
-        for idx, my_stroke in enumerate(test_list):
+        test_list_z = [[stroke1, stroke2] for stroke1, stroke2 in zip(test_list[0],test_list[1])]
+
+        for idx, stroke in enumerate(test_list_z):
             progress_bar(idx, len(test_list), 'Window Testing')
 
             all_probs = []
-            test_set = My_dataset_temporal(my_stroke, args.size_data, augmentation=False)
+            test_set = My_dataset_temporal([stroke[0], stroke[1]], args.size_data, augmentation=False)
             test_loader = DataLoader(test_set, batch_size=args.batch_size, shuffle=False, num_workers=args.workers)
 
             for idx, batch in enumerate(test_loader):
@@ -682,7 +688,7 @@ def test_videos_segmentation(model, args, test_list, sum_stroke_scores=False):
 
                 output = model(stream_1, stream_2)                
                 all_probs.extend(output.data.tolist())
-            vote_strokes, mean_strokes, gaussian_strokes = compute_strokes_from_predictions(my_stroke.video_path, all_probs, args.size_data)
+            vote_strokes, mean_strokes, gaussian_strokes = compute_strokes_from_predictions(stroke.video_path, all_probs, args.size_data)
 
             store_stroke_to_xml(vote_strokes, xml_files_vote)
             store_stroke_to_xml(mean_strokes, xml_files_mean)
@@ -690,13 +696,15 @@ def test_videos_segmentation(model, args, test_list, sum_stroke_scores=False):
 
             if sum_stroke_scores:
                 all_probs_scoresummed = [[probs[0], probs[1:].sum()] for probs in all_probs]
-                vote_strokes_scoresummed, mean_strokes_scoresummed, gaussian_strokes_scoresummed = compute_strokes_from_predictions(my_stroke.video_path, all_probs_scoresummed, args.size_data)
+                vote_strokes_scoresummed, mean_strokes_scoresummed, gaussian_strokes_scoresummed = compute_strokes_from_predictions(stroke.video_path, all_probs_scoresummed, args.size_data)
                 
                 store_stroke_to_xml(vote_strokes_scoresummed, xml_files_vote_scoresummed)
                 store_stroke_to_xml(mean_strokes_scoresummed, xml_files_mean_scoresummed)
                 store_stroke_to_xml(gaussian_strokes_scoresummed, xml_files_gaussian_scoresummed)
 
-        progress_bar(len(test_list), len(test_list), 'Window Testing Done', 1, log=args.log)
+        progress_bar(len(test_list[0]), len(test_list[0]), 'Window Testing Done', 1, log=args.log)
+        print('test_videos_segmentation done at: ', datetime.datetime.now().strftime('%d/%m/%Y %H:%M:%S'))
+
         save_xml_data(xml_files_vote, path_xml_save_vote)
         save_xml_data(xml_files_mean, path_xml_save_mean)
         save_xml_data(xml_files_gaussian, path_xml_save_gaussian)
@@ -766,13 +774,14 @@ def classification_task(working_folder, data_in, epochs, model_load, model, test
     # Training process
     if args.train_model:
         train_model(model, args, train_loader, validation_loader)
+        print('classification training done at: ', datetime.datetime.now().strftime('%d/%m/%Y %H:%M:%S'))
     
     # Test process
     load_checkpoint(model, args)
     test_model(model, args, test_loader, list_of_strokes=LIST_OF_STROKES)
     test_prob_and_vote(model, args, test_strokes_list, list_of_strokes=LIST_OF_STROKES)
-    #if test_strokes_segmentation is not None: #??? what is task_path here?
-    #    test_videos_segmentation(model, args, test_strokes_segmentation, sum_stroke_scores=True) #??? what is task_path here?
+    if test_strokes_segmentation is not None: #??? what is task_path here?
+        test_videos_segmentation(model, args, test_strokes_segmentation, sum_stroke_scores=True) #??? what is task_path here?
     return 1
 
 '''
@@ -782,11 +791,14 @@ def get_videos_list(data_folder):
     '''
     Get list of videos and transform it to strokes for segmentation purpose
     '''
-    video_list = []
-    for video in os.listdir(data_folder):
-        video_path = os.path.join(data_folder, video)
-        video_list.append(My_stroke(video_path, 0, len(os.listdir(video_path)), 0))
-    return video_list
+    video_list_streams = []
+    for index, item in enumerate(data_folder):
+        video_list = []
+        for video in os.listdir(data_folder[index]):
+            video_path = os.path.join(data_folder[index], video)
+            video_list.append(My_stroke(video_path, 0, len(os.listdir(video_path)), 0))
+        video_list_streams.append(video_list)
+    return video_list_streams
 
 def get_annotations(xml_path, data_folder):
     '''
@@ -816,12 +828,11 @@ def get_lists_annotations(task_source, task_path):
     test_strokes = get_annotations(os.path.join(task_source, 'test'), os.path.join(task_path, 'test'))
     return train_strokes, validation_strokes, test_strokes
 
-def detection_task(working_folder, source_folder, data_in, epochs, model_load, model, test_include, log):
+def detection_task(working_folder, source_folder, data_in, epochs, model_load, model, log):
     '''
     Main of the detection task
     Return test segmentation video to try with the classification model
     '''
-    test_strokes_segmentation = test_stream_design(working_folder, test_include)
 
     print_and_log('\nDetection Task', log=log)
     # Initialization
@@ -858,13 +869,14 @@ def detection_task(working_folder, source_folder, data_in, epochs, model_load, m
     # Training process
     if args.train_model:
         train_model(model, args, train_loader, validation_loader)
+        print('detection training done at: ', datetime.datetime.now().strftime('%d/%m/%Y %H:%M:%S'))
     
     # Test process
     load_checkpoint(model, args)
     test_model(model, args, test_loader)
     test_prob_and_vote(model, args, test_strokes_list)
-    #list_of_test_videos = get_videos_list(os.path.join(task_path, 'test')) #??? what is task_path here?
-    #test_videos_segmentation(model, args, list_of_test_videos) #??? what is task_path here?
+    list_of_test_videos = get_videos_list(os.path.join(task_paths, 'test')) #??? what is task_path here?
+    test_videos_segmentation(model, args, list_of_test_videos) #??? what is task_path here?
     return 1
 
 def test_stream_design(working_folder, test_include):
@@ -955,10 +967,10 @@ if __name__ == "__main__":
 
     # Tasks
     if args.task=='dc':
-        detection_task(working_folder, source_folder, data_in, epochs, args.model_load_d, args.model, test_include=None, log=log)
+        detection_task(working_folder, source_folder, data_in, epochs, args.model_load_d, args.model, log=log)
         classification_task(working_folder, data_in, epochs, args.model_load_c, args.model, test_include=None, log=log)
     elif args.task=='d':
-        detection_task(working_folder, source_folder, data_in, epochs, args.model_load_d, args.model, test_include=None, log=log)
+        detection_task(working_folder, source_folder, data_in, epochs, args.model_load_d, args.model, log=log)
     elif args.task=='c':
         classification_task(working_folder, data_in, epochs, args.model_load_c, args.model, test_include=None, log=log)
     
