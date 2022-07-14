@@ -249,9 +249,9 @@ class AttentionModule3D(nn.Module):
 '''
 3D Attention Model  
 '''
-class CCNAttentionNetV1(nn.Module):
+class CNNAttentionNetV1(nn.Module):
     def __init__(self, size_data, n_classes, in_dim=3, filters=[8,16,32,64,128,256], cuda=True):
-        super(CCNAttentionNetV1, self).__init__()
+        super(CNNAttentionNetV1, self).__init__()
 
         layers = []
         for idx, out_dim in enumerate(filters):
@@ -287,9 +287,9 @@ class CCNAttentionNetV1(nn.Module):
         features = self.linear2(features)
         return self.final(features)
 
-class CCNAttentionNetV2(nn.Module):
+class CNNAttentionNetV2(nn.Module):
     def __init__(self, size_data, n_classes, in_dim=3, filters=[32,64,128,256,512], cuda=True):
-        super(CCNAttentionNetV2, self).__init__()
+        super(CNNAttentionNetV2, self).__init__()
         # Per default parameters
         # pool_size = (2,2,2)
         # pool_stride = (2,2,2)
@@ -337,9 +337,9 @@ class CCNAttentionNetV2(nn.Module):
 '''
 Attention Net that represents one stream
 '''
-class CCNAttentionNetV1_Stream(nn.Module):
+class CNNAttentionNetV1_Stream(nn.Module):
     def __init__(self, size_data, n_classes, in_dim=3, filters=[8,16,32,64,128,256], cuda=True):
-        super(CCNAttentionNetV1_Stream, self).__init__()
+        super(CNNAttentionNetV1_Stream, self).__init__()
 
         layers = []
         for idx, out_dim in enumerate(filters):
@@ -374,9 +374,9 @@ class CCNAttentionNetV1_Stream(nn.Module):
         features = self.linear2(features)
         return features
 
-class CCNAttentionNetV2_Stream(nn.Module):
+class CNNAttentionNetV2_Stream(nn.Module):
     def __init__(self, size_data, n_classes, in_dim=3, filters=[32,64,128,256,512], cuda=True):
-        super(CCNAttentionNetV2_Stream, self).__init__()
+        super(CNNAttentionNetV2_Stream, self).__init__()
         
         layers = []
         for idx, out_dim in enumerate(filters):
@@ -414,13 +414,13 @@ class CCNAttentionNetV2_Stream(nn.Module):
         features = self.linear2(features)
         return features
 
-class CCNAttentionNetV1_TwoStream(nn.Module):
+class CNNAttentionNetV1_TwoStream(nn.Module):
     def __init__(self, size_data, n_classes, in_dim=3, filters=[8,16,32,64,128,256], cuda=True):
-        super(CCNAttentionNetV1_TwoStream, self).__init__()
+        super(CNNAttentionNetV1_TwoStream, self).__init__()
         
         # need to vopy value of size data as model chabges  it 
-        self.stream_one = CCNAttentionNetV1_Stream(size_data.copy(), n_classes)
-        self.stream_two = CCNAttentionNetV1_Stream(size_data.copy(), n_classes)
+        self.stream_one = CNNAttentionNetV1_Stream(size_data.copy(), n_classes)
+        self.stream_two = CNNAttentionNetV1_Stream(size_data.copy(), n_classes)
 
         self.final = nn.Softmax(1)
         ## Use GPU
@@ -432,14 +432,14 @@ class CCNAttentionNetV1_TwoStream(nn.Module):
         s2_out = self.stream_two(features_s2)
         return self.final(s1_out + s2_out)
 
-class CCNAttentionNetV2_TwoStream(nn.Module):
+class CNNAttentionNetV2_TwoStream(nn.Module):
     def __init__(self, size_data, n_classes, in_dim=3, filters=[32,64,128,256,512], cuda=True):
-        super(CCNAttentionNetV2_TwoStream, self).__init__()
+        super(CNNAttentionNetV2_TwoStream, self).__init__()
         
         
         # need to vopy value of size data as model chabges  it 
-        self.stream_one = CCNAttentionNetV2_Stream(size_data.copy(), n_classes)
-        self.stream_two = CCNAttentionNetV2_Stream(size_data.copy(), n_classes)
+        self.stream_one = CNNAttentionNetV2_Stream(size_data.copy(), n_classes)
+        self.stream_two = CNNAttentionNetV2_Stream(size_data.copy(), n_classes)
 
         self.final = nn.Softmax(1)
         ## Use GPU
@@ -452,9 +452,9 @@ class CCNAttentionNetV2_TwoStream(nn.Module):
         return self.final(s1_out + s2_out)
 
 
-class CCNAttentionNetV2_TwoStream_Early(nn.Module):
+class CNNAttentionNetV2_TwoStream_Early(nn.Module):
     def __init__(self, size_data, n_classes, in_dim=3, filters=[32,64,128,256,512], cuda=True):
-        super(CCNAttentionNetV2_TwoStream_Early, self).__init__()
+        super(CNNAttentionNetV2_TwoStream_Early, self).__init__()
         
         layers_stream1 = []
         layers_stream2 = []

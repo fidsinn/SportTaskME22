@@ -300,8 +300,8 @@ Model Architecture
 '''
 def make_architecture(args, output_size):
     print_and_log('Make Model', log=args.log)
-    model = 'CCNAttentionNet' + args.model + '_TwoStream(args.size_data.copy(), output_size)'
-    #model = CCNAttentionNetV2_TwoStream(args.size_data.copy(), output_size) #??? args.model eval(...)
+    model = 'CNNAttentionNet' + args.model + '_TwoStream(args.size_data.copy(), output_size)'
+    #model = CNNAttentionNetV2_TwoStream(args.size_data.copy(), output_size) #??? args.model eval(...)
     model = eval(model)
     print_and_log('Model %s created' % (model.__class__.__name__), log=args.log)
     ## Use GPU
