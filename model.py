@@ -95,7 +95,25 @@ class MyBatchNorm(_BatchNorm): ## Replace nn.BatchNorm3d
         # output = output.reshape(self.saved_shape)
 
         # return output
+'''
+Fusion Block
+'''
 
+class EarlyFusionBlock(nn.Module):
+    def __init__(self, fuse = True, fusion_perc = 0.5, cuda=True):
+        super(EarlyFusionBlock, self).__init__()
+        
+        self.fuse = fuse
+        self.fusion_perc = fusion_perc
+
+        ## Use GPU
+        if cuda:
+            self.cuda()
+
+    def forward(self, feat_1, feat_2):
+        if self.fuse:
+            feat_1 = feat_1 * (1 - self.fusion_perc) + feat_2 * self.fusion_perc
+        return feat_1
 '''
 3D Attention Blocks  
 '''
@@ -452,14 +470,20 @@ class CNNAttentionNetV2_TwoStream(nn.Module):
         return self.final(s1_out + s2_out)
 
 
-class CNNAttentionNetV2_TwoStream_Early(nn.Module):
+class CNNAttentionNetV2E_TwoStream(nn.Module):
     def __init__(self, size_data, n_classes, in_dim=3, filters=[32,64,128,256,512], cuda=True):
-        super(CNNAttentionNetV2_TwoStream_Early, self).__init__()
-        
-        layers_stream1 = []
-        layers_stream2 = []
+        super(CNNAttentionNetV2E_TwoStream, self).__init__()
+        layers_stream1_bf = []
+        layers_stream2_bf = []
+        layers_stream1_af = []
+        layers_stream2_af = []
 
-        for idx, out_dim in enumerate(filters):
+        # fusion index
+        f_idx = 2
+
+        # layers before fusion
+        for idx, out_dim in enumerate(filters[:f_idx]):
+
             # First layer, no diminution of dimension on temporal domain, double
             if idx < 2: 
                 pool_size=(4,3,2)
@@ -468,18 +492,42 @@ class CNNAttentionNetV2_TwoStream_Early(nn.Module):
                 pool_size = [2,2,2]
                 pool_stride = [2,2,2]
 
-            layers_stream1.append(BlockConvReluPool3D(in_dim, out_dim, cuda=cuda, pool_size=pool_size, pool_stride=pool_stride))
-            layers_stream2.append(BlockConvReluPool3D(in_dim, out_dim, cuda=cuda, pool_size=pool_size, pool_stride=pool_stride))
+            layers_stream1_bf.append(BlockConvReluPool3D(in_dim, out_dim, cuda=cuda, pool_size=pool_size, pool_stride=pool_stride))
+            layers_stream2_bf.append(BlockConvReluPool3D(in_dim, out_dim, cuda=cuda, pool_size=pool_size, pool_stride=pool_stride))
 
             size_data //= pool_stride
             in_dim = out_dim
             
             # No attention mechanism on the two last layers (min dim = 2 in this configuration) - (W,H,T)=(5,2,3)
-            layers_stream1.append(AttentionModule3D(in_dim, in_dim, size_data, np.ceil(size_data/2), np.ceil(size_data/4), cuda=cuda))
-            layers_stream2.append(AttentionModule3D(in_dim, in_dim, size_data, np.ceil(size_data/2), np.ceil(size_data/4), cuda=cuda))
+            layers_stream1_bf.append(AttentionModule3D(in_dim, in_dim, size_data, np.ceil(size_data/2), np.ceil(size_data/4), cuda=cuda))
+            layers_stream2_bf.append(AttentionModule3D(in_dim, in_dim, size_data, np.ceil(size_data/2), np.ceil(size_data/4), cuda=cuda))
 
-        self.sequential_stream1 = nn.Sequential(*layers_stream1)
-        self.sequential_stream2 = nn.Sequential(*layers_stream2)
+        # layers after fusion
+        for idx, out_dim in enumerate(filters[f_idx:]):
+            # First layer, no diminution of dimension on temporal domain, double
+            if idx < 1: 
+                pool_size=(4,3,2)
+                pool_stride = [4,3,2]
+            else: # To finally have similar dimension:20x20x24
+                pool_size = [2,2,2]
+                pool_stride = [2,2,2]
+
+            layers_stream1_af.append(BlockConvReluPool3D(in_dim, out_dim, cuda=cuda, pool_size=pool_size, pool_stride=pool_stride))
+            layers_stream2_af.append(BlockConvReluPool3D(in_dim, out_dim, cuda=cuda, pool_size=pool_size, pool_stride=pool_stride))
+
+            size_data //= pool_stride
+            in_dim = out_dim
+            
+            # No attention mechanism on the two last layers (min dim = 2 in this configuration) - (W,H,T)=(5,2,3)
+            layers_stream1_af.append(AttentionModule3D(in_dim, in_dim, size_data, np.ceil(size_data/2), np.ceil(size_data/4), cuda=cuda))
+            layers_stream2_af.append(AttentionModule3D(in_dim, in_dim, size_data, np.ceil(size_data/2), np.ceil(size_data/4), cuda=cuda))
+
+        self.sequential_stream1_bf = nn.Sequential(*layers_stream1_bf)
+        self.sequential_stream2_bf = nn.Sequential(*layers_stream2_bf)
+
+        self.sequential_stream1_af = nn.Sequential(*layers_stream1_af)
+        self.sequential_stream2_af = nn.Sequential(*layers_stream2_af)
+
         # (W,H,T)=(3,2,2) - lenght features = 6144
         size_linear_src = size_data[0]*size_data[1]*size_data[2]*in_dim
         size_linear_dest = size_linear_src//6
@@ -495,9 +543,22 @@ class CNNAttentionNetV2_TwoStream_Early(nn.Module):
         if cuda:
             self.cuda()
 
+    # unidirectional fusion s2 in s1
+    def fusion(self, features_s1, features_s2, fusion_perc = 0.5):
+        s1 = features_s1 * (1 - fusion_perc) + features_s2 * fusion_perc
+        s2 = features_s2
+        return s1, s2
+
+
     def forward(self, features_s1, features_s2):
-        features_s1 = self.sequential_stream1(features_s1)
-        features_s2 = self.sequential_stream2(features_s2)
+        features_s1 = self.sequential_stream1_bf(features_s1)
+        features_s2 = self.sequential_stream2_bf(features_s2)
+
+        # does this affect the attention blocks?
+        features_s1, features_s2 = self.fusion(features_s1, features_s2)
+
+        features_s1 = self.sequential_stream1_af(features_s1)
+        features_s2 = self.sequential_stream2_af(features_s2)
 
         features_s1 = features_s1.view(-1, flatten_features(features_s1))
         features_s2 = features_s2.view(-1, flatten_features(features_s2))
