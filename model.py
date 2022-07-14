@@ -95,7 +95,25 @@ class MyBatchNorm(_BatchNorm): ## Replace nn.BatchNorm3d
         # output = output.reshape(self.saved_shape)
 
         # return output
+'''
+Fusion Block
+'''
 
+class EarlyFusionBlock(nn.Module):
+    def __init__(self, fuse = True, fusion_perc = 0.5, cuda=True):
+        super(EarlyFusionBlock, self).__init__()
+        
+        self.fuse = fuse
+        self.fusion_perc = fusion_perc
+
+        ## Use GPU
+        if cuda:
+            self.cuda()
+
+    def forward(self, feat_1, feat_2):
+        if self.fuse:
+            feat_1 = feat_1 * (1 - self.fusion_perc) + feat_2 * self.fusion_perc
+        return feat_1
 '''
 3D Attention Blocks  
 '''
@@ -249,9 +267,9 @@ class AttentionModule3D(nn.Module):
 '''
 3D Attention Model  
 '''
-class CCNAttentionNetV1(nn.Module):
+class CNNAttentionNetV1(nn.Module):
     def __init__(self, size_data, n_classes, in_dim=3, filters=[8,16,32,64,128,256], cuda=True):
-        super(CCNAttentionNetV1, self).__init__()
+        super(CNNAttentionNetV1, self).__init__()
 
         layers = []
         for idx, out_dim in enumerate(filters):
@@ -287,9 +305,9 @@ class CCNAttentionNetV1(nn.Module):
         features = self.linear2(features)
         return self.final(features)
 
-class CCNAttentionNetV2(nn.Module):
+class CNNAttentionNetV2(nn.Module):
     def __init__(self, size_data, n_classes, in_dim=3, filters=[32,64,128,256,512], cuda=True):
-        super(CCNAttentionNetV2, self).__init__()
+        super(CNNAttentionNetV2, self).__init__()
         # Per default parameters
         # pool_size = (2,2,2)
         # pool_stride = (2,2,2)
@@ -337,9 +355,9 @@ class CCNAttentionNetV2(nn.Module):
 '''
 Attention Net that represents one stream
 '''
-class CCNAttentionNetV1_Stream(nn.Module):
+class CNNAttentionNetV1_Stream(nn.Module):
     def __init__(self, size_data, n_classes, in_dim=3, filters=[8,16,32,64,128,256], cuda=True):
-        super(CCNAttentionNetV1_Stream, self).__init__()
+        super(CNNAttentionNetV1_Stream, self).__init__()
 
         layers = []
         for idx, out_dim in enumerate(filters):
@@ -374,9 +392,9 @@ class CCNAttentionNetV1_Stream(nn.Module):
         features = self.linear2(features)
         return features
 
-class CCNAttentionNetV2_Stream(nn.Module):
+class CNNAttentionNetV2_Stream(nn.Module):
     def __init__(self, size_data, n_classes, in_dim=3, filters=[32,64,128,256,512], cuda=True):
-        super(CCNAttentionNetV2_Stream, self).__init__()
+        super(CNNAttentionNetV2_Stream, self).__init__()
         
         layers = []
         for idx, out_dim in enumerate(filters):
@@ -402,7 +420,6 @@ class CCNAttentionNetV2_Stream(nn.Module):
         self.activation = nn.ReLU()
 
         self.linear2 = nn.Linear(size_linear_dest, n_classes)
-        self.final = nn.Softmax(1)
 
         ## Use GPU
         if cuda:
@@ -413,15 +430,15 @@ class CCNAttentionNetV2_Stream(nn.Module):
         features = features.view(-1, flatten_features(features))
         features = self.activation(self.linear1(features))
         features = self.linear2(features)
-        return self.final(features)
+        return features
 
-class CCNAttentionNetV1_TwoStream(nn.Module):
+class CNNAttentionNetV1_TwoStream(nn.Module):
     def __init__(self, size_data, n_classes, in_dim=3, filters=[8,16,32,64,128,256], cuda=True):
-        super(CCNAttentionNetV1_TwoStream, self).__init__()
+        super(CNNAttentionNetV1_TwoStream, self).__init__()
         
         # need to vopy value of size data as model chabges  it 
-        self.stream_one = CCNAttentionNetV1_Stream(size_data.copy(), n_classes)
-        self.stream_two = CCNAttentionNetV1_Stream(size_data.copy(), n_classes)
+        self.stream_one = CNNAttentionNetV1_Stream(size_data.copy(), n_classes)
+        self.stream_two = CNNAttentionNetV1_Stream(size_data.copy(), n_classes)
 
         self.final = nn.Softmax(1)
         ## Use GPU
@@ -433,13 +450,14 @@ class CCNAttentionNetV1_TwoStream(nn.Module):
         s2_out = self.stream_two(features_s2)
         return self.final(s1_out + s2_out)
 
-class CCNAttentionNetV2_TwoStream(nn.Module):
+class CNNAttentionNetV2_TwoStream(nn.Module):
     def __init__(self, size_data, n_classes, in_dim=3, filters=[32,64,128,256,512], cuda=True):
-        super(CCNAttentionNetV2_TwoStream, self).__init__()
+        super(CNNAttentionNetV2_TwoStream, self).__init__()
+        
         
         # need to vopy value of size data as model chabges  it 
-        self.stream_one = CCNAttentionNetV2_Stream(size_data.copy(), n_classes)
-        self.stream_two = CCNAttentionNetV2_Stream(size_data.copy(), n_classes)
+        self.stream_one = CNNAttentionNetV2_Stream(size_data.copy(), n_classes)
+        self.stream_two = CNNAttentionNetV2_Stream(size_data.copy(), n_classes)
 
         self.final = nn.Softmax(1)
         ## Use GPU
@@ -450,3 +468,105 @@ class CCNAttentionNetV2_TwoStream(nn.Module):
         s1_out = self.stream_one(features_s1)
         s2_out = self.stream_two(features_s2)
         return self.final(s1_out + s2_out)
+
+
+class CNNAttentionNetV2E_TwoStream(nn.Module):
+    def __init__(self, size_data, n_classes, in_dim=3, filters=[32,64,128,256,512], cuda=True):
+        super(CNNAttentionNetV2E_TwoStream, self).__init__()
+        layers_stream1_bf = []
+        layers_stream2_bf = []
+        layers_stream1_af = []
+        layers_stream2_af = []
+
+        # fusion index
+        f_idx = 2
+
+        # layers before fusion
+        for idx, out_dim in enumerate(filters[:f_idx]):
+
+            # First layer, no diminution of dimension on temporal domain, double
+            if idx < 2: 
+                pool_size=(4,3,2)
+                pool_stride = [4,3,2]
+            else: # To finally have similar dimension:20x20x24
+                pool_size = [2,2,2]
+                pool_stride = [2,2,2]
+
+            layers_stream1_bf.append(BlockConvReluPool3D(in_dim, out_dim, cuda=cuda, pool_size=pool_size, pool_stride=pool_stride))
+            layers_stream2_bf.append(BlockConvReluPool3D(in_dim, out_dim, cuda=cuda, pool_size=pool_size, pool_stride=pool_stride))
+
+            size_data //= pool_stride
+            in_dim = out_dim
+            
+            # No attention mechanism on the two last layers (min dim = 2 in this configuration) - (W,H,T)=(5,2,3)
+            layers_stream1_bf.append(AttentionModule3D(in_dim, in_dim, size_data, np.ceil(size_data/2), np.ceil(size_data/4), cuda=cuda))
+            layers_stream2_bf.append(AttentionModule3D(in_dim, in_dim, size_data, np.ceil(size_data/2), np.ceil(size_data/4), cuda=cuda))
+
+        # layers after fusion
+        for idx, out_dim in enumerate(filters[f_idx:]):
+            # First layer, no diminution of dimension on temporal domain, double
+            if idx < 1: 
+                pool_size=(4,3,2)
+                pool_stride = [4,3,2]
+            else: # To finally have similar dimension:20x20x24
+                pool_size = [2,2,2]
+                pool_stride = [2,2,2]
+
+            layers_stream1_af.append(BlockConvReluPool3D(in_dim, out_dim, cuda=cuda, pool_size=pool_size, pool_stride=pool_stride))
+            layers_stream2_af.append(BlockConvReluPool3D(in_dim, out_dim, cuda=cuda, pool_size=pool_size, pool_stride=pool_stride))
+
+            size_data //= pool_stride
+            in_dim = out_dim
+            
+            # No attention mechanism on the two last layers (min dim = 2 in this configuration) - (W,H,T)=(5,2,3)
+            layers_stream1_af.append(AttentionModule3D(in_dim, in_dim, size_data, np.ceil(size_data/2), np.ceil(size_data/4), cuda=cuda))
+            layers_stream2_af.append(AttentionModule3D(in_dim, in_dim, size_data, np.ceil(size_data/2), np.ceil(size_data/4), cuda=cuda))
+
+        self.sequential_stream1_bf = nn.Sequential(*layers_stream1_bf)
+        self.sequential_stream2_bf = nn.Sequential(*layers_stream2_bf)
+
+        self.sequential_stream1_af = nn.Sequential(*layers_stream1_af)
+        self.sequential_stream2_af = nn.Sequential(*layers_stream2_af)
+
+        # (W,H,T)=(3,2,2) - lenght features = 6144
+        size_linear_src = size_data[0]*size_data[1]*size_data[2]*in_dim
+        size_linear_dest = size_linear_src//6
+        self.linear1_stream1 = nn.Linear(size_linear_src, size_linear_dest)
+        self.linear1_stream2 = nn.Linear(size_linear_src, size_linear_dest)
+        self.activation_stream1 = nn.ReLU()
+        self.activation_stream2 = nn.ReLU()
+
+        self.linear2 = nn.Linear(size_linear_dest, n_classes)
+        self.final = nn.Softmax(1)
+
+        ## Use GPU
+        if cuda:
+            self.cuda()
+
+    # unidirectional fusion s2 in s1
+    def fusion(self, features_s1, features_s2, fusion_perc = 0.5):
+        s1 = features_s1 * (1 - fusion_perc) + features_s2 * fusion_perc
+        s2 = features_s2
+        return s1, s2
+
+
+    def forward(self, features_s1, features_s2):
+        features_s1 = self.sequential_stream1_bf(features_s1)
+        features_s2 = self.sequential_stream2_bf(features_s2)
+
+        # does this affect the attention blocks?
+        features_s1, features_s2 = self.fusion(features_s1, features_s2)
+
+        features_s1 = self.sequential_stream1_af(features_s1)
+        features_s2 = self.sequential_stream2_af(features_s2)
+
+        features_s1 = features_s1.view(-1, flatten_features(features_s1))
+        features_s2 = features_s2.view(-1, flatten_features(features_s2))
+
+        features_s1 = self.activation_stream1(self.linear1_stream1(features_s1))
+        features_s2 = self.activation_stream2(self.linear1_stream2(features_s2))
+
+        features_s1 = self.linear2(features_s1)
+        features_s2 = self.linear2(features_s2)
+
+        return self.final(features_s1 + features_s2)

@@ -30,10 +30,10 @@ print('Nb of threads for OpenCV : ', cv2.getNumThreads())
 Model variables
 '''
 class My_variables():
-    def __init__(self, working_path, data_in, task_name, epochs, model_load, model, test_include, size_data=[320,180,96], cuda=True, batch_size=10, workers=5, lr=0.0001, nesterov=True, weight_decay=0.005, momentum=0.5):
+    def __init__(self, working_path, data_in, task_name, epochs, model_load, test_include, size_data=[320,180,96], cuda=True, batch_size=8, workers=10, lr=0.0001, nesterov=True, weight_decay=0.005, momentum=0.5):
         self.data_in = data_in
         self.epochs = epochs
-        self.model = model
+        self.model = model_load
         self.test_include = test_include
         self.size_data = np.array(size_data)
         self.cuda = cuda
@@ -312,8 +312,8 @@ Model Architecture
 '''
 def make_architecture(args, output_size):
     print_and_log('Make Model', log=args.log)
-    model = 'CCNAttentionNet' + args.model + '_TwoStream(args.size_data.copy(), output_size)'
-    #model = CCNAttentionNetV2_TwoStream(args.size_data.copy(), output_size)
+    model = 'CNNAttentionNet' + args.model + '_TwoStream(args.size_data.copy(), output_size)'
+    #model = CNNAttentionNetV2_TwoStream(args.size_data.copy(), output_size)
     model = eval(model)
     print_and_log('Model %s created' % (model.__class__.__name__), log=args.log)
     ## Use GPU
@@ -323,8 +323,8 @@ def make_architecture(args, output_size):
 
 def make_architecture_test(args, output_size):
     print_and_log('Make Model', log=args.log)
-    model = 'CCNAttentionNet' + args.model + '_Stream(args.size_data.copy(), output_size)'
-    #model = CCNAttentionNetV2_Stream(args.size_data.copy(), output_size)
+    model = 'CNNAttentionNet' + args.model + '_Stream(args.size_data.copy(), output_size)'
+    #model = CNNAttentionNetV2_Stream(args.size_data.copy(), output_size)
     model = eval(model)
     print_and_log('Model %s created' % (model.__class__.__name__), log=args.log)
     ## Use GPU
@@ -913,7 +913,7 @@ def parse_args():
     parser.add_argument('--task','-t',default='dc',
                         choices=['dc', 'd', 'c'],
                         help='dc(detection and classification); d(detection); c(classification)')
-    parser.add_argument('--model', '-m',default='V1',
+    parser.add_argument('--model', '-m',default='V2',
                         help='choose model from model.py (e.g. V1, V2,...)')
     parser.add_argument('--stream_design1','-sd1',default='rgb',
                         choices=['rgb', 's', 'srgb'],
