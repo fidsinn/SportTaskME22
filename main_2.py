@@ -596,13 +596,13 @@ def infer_stroke_list_from_vector(video_path, vector_decision, threshold=30):
     '''
     Segment the vector in strokes according to min threshold. Note: there is no maximun threshold
     '''
-    print('vector_decision before z.599:', vector_decision)
+    #print('vector_decision before z.599:', vector_decision) #!!
     vector_decision = np.array(vector_decision)>0
-    print('vector_decision after z.601:', vector_decision)
+    #print('vector_decision after z.601:', vector_decision) #!!
     begin = -1
     stroke_list = []
     for idx, frame_decision in enumerate(vector_decision):
-        print('frame_decision loop:', frame_decision, 'begin:', begin, 'index:', idx)
+        #print('frame_decision loop:', frame_decision, 'begin:', begin, 'index:', idx) #!!
         if frame_decision and begin==-1:
             begin = idx
         elif not frame_decision and begin != -1:
@@ -613,7 +613,7 @@ def infer_stroke_list_from_vector(video_path, vector_decision, threshold=30):
     if frame_decision and begin != -1:
         if idx-begin>=threshold:
             stroke_list.append(My_stroke(video_path, begin, idx, 1))
-    print('stroke_list z.616:', stroke_list)
+    #print('stroke_list z.616:', stroke_list) #!!
     return stroke_list
 
 def compute_strokes_from_predictions(video_path, all_probs, size_data, window_decision=100):
@@ -692,12 +692,12 @@ def test_videos_segmentation(model, args, test_list, sum_stroke_scores=False):
                 output = model(stream_1, stream_2)                
                 all_probs.extend(output.data.tolist())
 
-            print('stroke[0]', stroke[0])
-            print('stroke[0].video_path into z.691:', stroke[0].video_path)
+            #print('stroke[0]', stroke[0]) #!!
+            #print('stroke[0].video_path into z.691:', stroke[0].video_path) #!!
             vote_strokes, mean_strokes, gaussian_strokes = compute_strokes_from_predictions(stroke[0].video_path, all_probs, args.size_data)
-            print('vote_strokes:', vote_strokes)
-            print('mean_strokes:', mean_strokes)
-            print('gaussian_strokes:', gaussian_strokes)
+            #print('vote_strokes:', vote_strokes) #!!
+            #print('mean_strokes:', mean_strokes) #!!
+            #print('gaussian_strokes:', gaussian_strokes) #!!
 
             store_stroke_to_xml(vote_strokes, xml_files_vote)
             store_stroke_to_xml(mean_strokes, xml_files_mean)
@@ -747,7 +747,9 @@ def classification_task(working_folder, data_in, epochs, model_load, model, test
     Main of the classification task
     Perform also on the detection task when the videos for segmentation are provided
     '''
-    test_strokes_segmentation = test_stream_design(working_folder, test_include)
+    
+    #test_strokes_segmentation = test_stream_design(working_folder, test_include)
+    test_strokes_segmentation = None
 
     print_and_log('\nClassification Task', log=log)
     # Initialization
@@ -785,10 +787,11 @@ def classification_task(working_folder, data_in, epochs, model_load, model, test
     
     # Test process
     load_checkpoint(model, args)
-    test_model(model, args, test_loader, list_of_strokes=LIST_OF_STROKES)
-    test_prob_and_vote(model, args, test_strokes_list, list_of_strokes=LIST_OF_STROKES)
-    if test_strokes_segmentation is not None: #??? what is task_path here?
-        test_videos_segmentation(model, args, test_strokes_segmentation, sum_stroke_scores=True) #??? what is task_path here?
+    if test_include is not None:
+        test_model(model, args, test_loader, list_of_strokes=LIST_OF_STROKES)
+        test_prob_and_vote(model, args, test_strokes_list, list_of_strokes=LIST_OF_STROKES)
+        if test_strokes_segmentation is not None: #??? what is task_path here?
+            test_videos_segmentation(model, args, test_strokes_segmentation, sum_stroke_scores=True) #??? what is task_path here?
     return 1
 
 '''
@@ -833,7 +836,7 @@ def get_lists_annotations(task_source, task_path):
     test_strokes = get_annotations(os.path.join(task_source, 'test'), os.path.join(task_path, 'test'))
     return train_strokes, validation_strokes, test_strokes
 
-def detection_task(working_folder, source_folder, data_in, epochs, model_load, model, log):
+def detection_task(working_folder, source_folder, data_in, epochs, model_load, model, test_include, log):
     '''
     Main of the detection task
     Return test segmentation video to try with the classification model
@@ -875,18 +878,19 @@ def detection_task(working_folder, source_folder, data_in, epochs, model_load, m
     
     # Test process
     load_checkpoint(model, args)
-    #test_model(model, args, test_loader)
-    #test_prob_and_vote(model, args, test_strokes_list)
-    list_of_test_videos_streams = []
-    for path in task_paths:
-        print('test_paths', task_paths)
-        print('test_path', path)
-        test_videos = get_videos_list(os.path.join(path, 'test'))
-        print('test_videos', test_videos)
-        list_of_test_videos_streams.append(test_videos)
-    print('list_of_test_videos_streams', list_of_test_videos_streams)
-    #list_of_test_videos = get_videos_list(os.path.join(task_paths, 'test')) #??? what is task_path here?
-    test_videos_segmentation(model, args, list_of_test_videos_streams) #??? what is task_path here?
+    if test_include is not None:
+        test_model(model, args, test_loader)
+        test_prob_and_vote(model, args, test_strokes_list)
+        list_of_test_videos_streams = []
+        for path in task_paths:
+            print('test_paths', task_paths)
+            print('test_path', path)
+            test_videos = get_videos_list(os.path.join(path, 'test'))
+            print('test_videos', test_videos)
+            list_of_test_videos_streams.append(test_videos)
+        print('list_of_test_videos_streams', list_of_test_videos_streams)
+        #list_of_test_videos = get_videos_list(os.path.join(task_paths, 'test')) #??? what is task_path here?
+        test_videos_segmentation(model, args, list_of_test_videos_streams) #??? what is task_path here?
     return 1
 
 def test_stream_design(working_folder, test_include):
@@ -922,6 +926,9 @@ def parse_args():
                         help='load model from \'/working_folder/Models/<task_name>/<model_load_c>')
     parser.add_argument('--model_load_d','-mld', default=None,
                         help='load model from \'/working_folder/Models/<task_name>/<model_load_d>')
+    parser.add_argument('--test_include','-ti',default=None,
+                        choices=['test', None],
+                        help='log(include writing log); nolog')
     parser.add_argument('--log_include','-li',default='nolog',
                         choices=['log', 'nolog'],
                         help='log(include writing log); nolog')
@@ -978,11 +985,11 @@ if __name__ == "__main__":
 
     # Tasks
     if args.task=='dc':
-        detection_task(working_folder, source_folder, data_in, epochs, args.model_load_d, args.model, log=log)
-        classification_task(working_folder, data_in, epochs, args.model_load_c, args.model, test_include=None, log=log)
+        detection_task(working_folder, source_folder, data_in, epochs, args.model_load_d, args.model, args.test_include, log=log)
+        classification_task(working_folder, data_in, epochs, args.model_load_c, args.model, args.test_include, log=log)
     elif args.task=='d':
-        detection_task(working_folder, source_folder, data_in, epochs, args.model_load_d, args.model, log=log)
+        detection_task(working_folder, source_folder, data_in, epochs, args.model_load_d, args.model, args.test_include, log=log)
     elif args.task=='c':
-        classification_task(working_folder, data_in, epochs, args.model_load_c, args.model, test_include=None, log=log)
+        classification_task(working_folder, data_in, epochs, args.model_load_c, args.model, args.test_include, log=log)
     
     print_and_log('All Done in %ds' % (time.time()-start_time), log=log)
