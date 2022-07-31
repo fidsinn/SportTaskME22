@@ -937,7 +937,7 @@ def parse_args():
     
 if __name__ == "__main__":
     '''
-    Promt looks like this: python main_2.py -t <task> -m <model> -sd1 <stream_design1>  -sd2 <stream_design2> -e <epochs> -ml <model_load> -li <log_include>
+    Promt looks like this: python main_2.py -t <task> -m <model> -sd1 <stream_design1>  -sd2 <stream_design2> -e <epochs> -mlc <model_load_classification> -mld <model_load_detection> -ti <test_include> -li <log_include>
     '''
 
     #args from terminal
