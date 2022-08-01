@@ -1,0 +1,27 @@
+#!/bin/bash -l 
+#SBATCH --ntasks=1
+#SBATCH --cpus-per-task=2
+#SBATCH --mem=25G
+
+#SBATCH --job-name=sporttask_eval_runs_val
+#SBATCH --time=7-00:00:00
+#SBATCH --partition=clara-job
+
+#SBATCH --gres=gpu:v100:1
+#SATCH --gres=gpu:rtx2080ti:2
+
+#SBATCH -o GIT/SportTaskME22/data/slurm_eval_logs/%j.%x.out
+#SBATCH -e GIT/SportTaskME22/data/slurm_eval_logs/%j.%x.err
+
+export OMP_NUM_THREADS=$SLURM_CPUS_PER_TASK
+
+cd GIT/SportTaskME22/data
+
+conda activate open-mmlab
+
+#TEMPLATE
+#srun python evaluation.py -p <folder_path> -sp <settype>
+
+#EVALUATION
+srun python evaluation.py -p Uni_Leipzig -sp validation
+#srun python evaluation.py -p Uni_Leipzig -sp test

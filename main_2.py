@@ -510,13 +510,20 @@ def save_xml_data(xml_files, path_xml_save):
 '''
 Inference on test set
 '''
-def test_model(model, args, data_loader, list_of_strokes=None):
+def test_model(model, args, data_loader, test_include, list_of_strokes=None):
     with torch.no_grad():
-        print('test_model starts...')
+        if test_include == 'validation':
+            print('test_model starts...')
+        else:
+            print('test_model (val) starts...')
         model.eval() # Set model to evaluation mode - needed for batchnorm
         xml_files = {}
-        path_xml_save = os.path.join(args.model_name, 'xml_test')
-        os.mkdir(path_xml_save)
+        if test_include == 'validation':
+            path_xml_save = os.path.join(args.model_name, 'xml_val')
+        else:
+            path_xml_save = os.path.join(args.model_name, 'xml_test')
+        if not os.path.isdir(path_xml_save):
+            os.mkdir(path_xml_save)
         N = len(data_loader.dataset)
         
         for batch_idx, batch in enumerate(data_loader):
@@ -533,20 +540,32 @@ def test_model(model, args, data_loader, list_of_strokes=None):
         progress_bar(N, N, 'Test done', 1, log=args.log)
         save_xml_data(xml_files, path_xml_save)
 
-def test_prob_and_vote(model, args, test_list, list_of_strokes=None):
+def test_prob_and_vote(model, args, test_list, test_include, list_of_strokes=None):
     with torch.no_grad(): # turn off gradients computation (in combination with model.eval())
-        print('test_prob_and_vote starts...')
+        if test_include == 'validation':
+            print('test_prob_and_vote starts...')
+        else:
+            print('test_prob_and_vote (val) starts...')
         model.eval() # Set model to evaluation mode - needed for batchnorm
         xml_files_vote = {}
-        path_xml_save_vote = os.path.join(args.model_name, 'xml_test_vote')
+        if test_include == 'validation':
+            path_xml_save_vote = os.path.join(args.model_name, 'xml_val_vote')
+        else:
+            path_xml_save_vote = os.path.join(args.model_name, 'xml_test_vote')
         if not os.path.isdir(path_xml_save_vote):
             os.mkdir(path_xml_save_vote)
         xml_files_mean = {}
-        path_xml_save_mean = os.path.join(args.model_name, 'xml_test_mean')
+        if test_include == 'validation':
+            path_xml_save_mean = os.path.join(args.model_name, 'xml_val_mean')
+        else:
+            path_xml_save_mean = os.path.join(args.model_name, 'xml_test_mean')
         if not os.path.isdir(path_xml_save_mean):
             os.mkdir(path_xml_save_mean)
         xml_files_gaussian = {}
-        path_xml_save_gaussian = os.path.join(args.model_name, 'xml_test_gaussian')
+        if test_include == 'validation':
+            path_xml_save_gaussian = os.path.join(args.model_name, 'xml_val_gaussian')
+        else:
+            path_xml_save_gaussian = os.path.join(args.model_name, 'xml_test_gaussian')
         if not os.path.isdir(path_xml_save_gaussian):
             os.mkdir(path_xml_save_gaussian)
 
@@ -641,7 +660,7 @@ def compute_strokes_from_predictions(video_path, all_probs, size_data, window_de
 
     return vote_strokes, mean_strokes, gaussian_strokes
 
-def test_videos_segmentation(model, args, test_list, sum_stroke_scores=False):
+def test_videos_segmentation(model, args, test_list, test_include, sum_stroke_scores=False):
     '''
     
     '''
@@ -649,29 +668,47 @@ def test_videos_segmentation(model, args, test_list, sum_stroke_scores=False):
         print('test_videos_segmentation starts...')
         model.eval() # Set model to evaluation mode - needed for batchnorm
         xml_files_vote = {}
-        path_xml_save_vote = os.path.join(args.model_name, 'xml_testseg_vote')
+        if test_include == 'validation':
+            path_xml_save_vote = os.path.join(args.model_name, 'xml_valseg_vote')
+        else:
+            path_xml_save_vote = os.path.join(args.model_name, 'xml_testseg_vote')
         if not os.path.isdir(path_xml_save_vote):
             os.mkdir(path_xml_save_vote)
         xml_files_mean = {}
-        path_xml_save_mean = os.path.join(args.model_name, 'xml_testseg_mean')
+        if test_include == 'validation':
+            path_xml_save_mean = os.path.join(args.model_name, 'xml_valseg_mean')
+        else:
+            path_xml_save_mean = os.path.join(args.model_name, 'xml_testseg_mean')
         if not os.path.isdir(path_xml_save_mean):
             os.mkdir(path_xml_save_mean)
         xml_files_gaussian = {}
-        path_xml_save_gaussian = os.path.join(args.model_name, 'xml_testseg_gaussian')
+        if test_include == 'validation':
+            path_xml_save_gaussian = os.path.join(args.model_name, 'xml_valseg_gaussian')
+        else:
+            path_xml_save_gaussian = os.path.join(args.model_name, 'xml_testseg_gaussian')
         if not os.path.isdir(path_xml_save_gaussian):
             os.mkdir(path_xml_save_gaussian)
 
         if sum_stroke_scores:
             xml_files_vote_scoresummed = {}
-            path_xml_save_vote_scoresummed = os.path.join(args.model_name, 'xml_testseg_vote_scoresummed')
+            if test_include == 'validation':
+                path_xml_save_vote_scoresummed = os.path.join(args.model_name, 'xml_valseg_vote_scoresummed')
+            else:
+                path_xml_save_vote_scoresummed = os.path.join(args.model_name, 'xml_testseg_vote_scoresummed')
             if not os.path.isdir(path_xml_save_vote_scoresummed):
                 os.mkdir(path_xml_save_vote_scoresummed)
             xml_files_mean_scoresummed = {}
-            path_xml_save_mean_scoresummed = os.path.join(args.model_name, 'xml_testseg_mean_scoresummed')
+            if test_include == 'validation':
+                path_xml_save_mean_scoresummed = os.path.join(args.model_name, 'xml_valseg_mean_scoresummed')
+            else:
+                path_xml_save_mean_scoresummed = os.path.join(args.model_name, 'xml_testseg_mean_scoresummed')
             if not os.path.isdir(path_xml_save_mean_scoresummed):
                 os.mkdir(path_xml_save_mean_scoresummed)
             xml_files_gaussian_scoresummed = {}
-            path_xml_save_gaussian_scoresummed = os.path.join(args.model_name, 'xml_testseg_gaussian_scoresummed')
+            if test_include == 'validation':
+                path_xml_save_gaussian_scoresummed = os.path.join(args.model_name, 'xml_valseg_gaussian_scoresummed')
+            else:
+                path_xml_save_gaussian_scoresummed = os.path.join(args.model_name, 'xml_testseg_gaussian_scoresummed')
             if not os.path.isdir(path_xml_save_gaussian_scoresummed):
                 os.mkdir(path_xml_save_gaussian_scoresummed)
 
@@ -725,14 +762,14 @@ def test_videos_segmentation(model, args, test_list, sum_stroke_scores=False):
 
 # Classification Task
 # Get Stroke labels from the directory structure and save it in the My_stroke class
-def get_classification_strokes(working_folder_task):
+def get_classification_strokes(working_folder_task, test_include_set):
     set_path = os.path.join(working_folder_task, 'train')
     train_strokes = [My_stroke(os.path.join(set_path, action_class, f), 0, len(os.listdir(os.path.join(set_path, action_class, f))), action_class)
         for action_class in os.listdir(set_path) for f in os.listdir(os.path.join(set_path, action_class))]
     set_path = os.path.join(working_folder_task, 'validation')
     validation_strokes = [My_stroke(os.path.join(set_path, action_class, f), 0, len(os.listdir(os.path.join(set_path, action_class, f))), action_class)
         for action_class in os.listdir(set_path) for f in os.listdir(os.path.join(set_path, action_class))]
-    set_path = os.path.join(working_folder_task, 'test')
+    set_path = os.path.join(working_folder_task, test_include_set)
     test_strokes = [My_stroke(os.path.join(set_path, f), 0, len(os.listdir(os.path.join(set_path, f))), 'Unknown') for f in os.listdir(set_path)]
     
     # they need to be sorted as list dir gets them in different orderes
@@ -759,17 +796,21 @@ def classification_task(working_folder, data_in, epochs, model_load, model, test
 
     print('  task_name:', task_name)
     for data in data_in:
-        task_paths.append(os.path.join(working_folder, data, task_name))
+        task_path = os.path.join(working_folder, data, task_name)
+        task_paths.append(task_path)
+
+    if test_include:
+        test_include_set = test_include
+    else:
+        test_include_set = 'test'
 
     # Split
     train_strokes_list, validation_strokes_list, test_strokes_list = [], [], []
     for path in task_paths:
-        train_strokes, validation_strokes, test_strokes = get_classification_strokes(path)
+        train_strokes, validation_strokes, test_strokes = get_classification_strokes(path, test_include_set)
         train_strokes_list.append(train_strokes)
         validation_strokes_list.append(validation_strokes)
         test_strokes_list.append(test_strokes)
-    print('  task_paths:', task_paths)
-    print()
 
     # Model variables
     args = My_variables(working_folder, data_in, task_name, epochs, model_load, model)
@@ -788,10 +829,10 @@ def classification_task(working_folder, data_in, epochs, model_load, model, test
     # Test process
     load_checkpoint(model, args)
     if test_include is not None:
-        test_model(model, args, test_loader, list_of_strokes=LIST_OF_STROKES)
-        test_prob_and_vote(model, args, test_strokes_list, list_of_strokes=LIST_OF_STROKES)
+        test_model(model, args, test_loader, test_include, list_of_strokes=LIST_OF_STROKES)
+        test_prob_and_vote(model, args, test_strokes_list, test_include, list_of_strokes=LIST_OF_STROKES)
         if test_strokes_segmentation is not None: #??? what is task_path here?
-            test_videos_segmentation(model, args, test_strokes_segmentation, sum_stroke_scores=True) #??? what is task_path here?
+            test_videos_segmentation(model, args, test_strokes_segmentation, test_include, sum_stroke_scores=True) #??? what is task_path here?
     return 1
 
 '''
@@ -827,13 +868,13 @@ def get_annotations(xml_path, data_folder):
     build_negative_strokes(strokes_list)
     return strokes_list
 
-def get_lists_annotations(task_source, task_path):
+def get_lists_annotations(task_source, task_path, test_include_set):
     '''
     Get the split of annotation and construct negative samples
     '''
     train_strokes = get_annotations(os.path.join(task_source, 'train'), os.path.join(task_path, 'train'))
     validation_strokes = get_annotations(os.path.join(task_source, 'validation'), os.path.join(task_path, 'validation'))
-    test_strokes = get_annotations(os.path.join(task_source, 'test'), os.path.join(task_path, 'test'))
+    test_strokes = get_annotations(os.path.join(task_source, test_include_set), os.path.join(task_path, test_include_set))
     return train_strokes, validation_strokes, test_strokes
 
 def detection_task(working_folder, source_folder, data_in, epochs, model_load, model, test_include, log):
@@ -853,15 +894,19 @@ def detection_task(working_folder, source_folder, data_in, epochs, model_load, m
     for data in data_in:
         task_path = os.path.join(working_folder, data, task_name)
         task_paths.append(task_path)
+    
+    if test_include:
+        test_include_set = test_include
+    else:
+        test_include_set = 'test'
 
     # Split
     train_strokes_list, validation_strokes_list, test_strokes_list = [], [], []
     for path in task_paths:
-        train_strokes, validation_strokes, test_strokes = get_lists_annotations(task_source, path)
+        train_strokes, validation_strokes, test_strokes = get_lists_annotations(task_source, path, test_include_set)
         train_strokes_list.append(train_strokes)
         validation_strokes_list.append(validation_strokes)
         test_strokes_list.append(test_strokes)
-
 
     # Model variables
     args = My_variables(working_folder, data_in, task_name, epochs, model_load, model)
@@ -879,18 +924,18 @@ def detection_task(working_folder, source_folder, data_in, epochs, model_load, m
     # Test process
     load_checkpoint(model, args)
     if test_include is not None:
-        test_model(model, args, test_loader)
-        test_prob_and_vote(model, args, test_strokes_list)
+        test_model(model, args, test_loader, test_include)
+        test_prob_and_vote(model, args, test_strokes_list, test_include)
         list_of_test_videos_streams = []
         for path in task_paths:
             print('test_paths', task_paths)
             print('test_path', path)
-            test_videos = get_videos_list(os.path.join(path, 'test'))
+            test_videos = get_videos_list(os.path.join(path, test_include_set))
             print('test_videos', test_videos)
             list_of_test_videos_streams.append(test_videos)
         print('list_of_test_videos_streams', list_of_test_videos_streams)
         #list_of_test_videos = get_videos_list(os.path.join(task_paths, 'test')) #??? what is task_path here?
-        test_videos_segmentation(model, args, list_of_test_videos_streams) #??? what is task_path here?
+        test_videos_segmentation(model, args, list_of_test_videos_streams, test_include) #??? what is task_path here?
     return 1
 
 def test_stream_design(working_folder, test_include):
@@ -927,7 +972,7 @@ def parse_args():
     parser.add_argument('--model_load_d','-mld', default=None,
                         help='load model from \'/working_folder/Models/<task_name>/<model_load_d>')
     parser.add_argument('--test_include','-ti',default=None,
-                        choices=['test', None],
+                        choices=['test', 'validation', None],
                         help='log(include writing log); nolog')
     parser.add_argument('--log_include','-li',default='nolog',
                         choices=['log', 'nolog'],
