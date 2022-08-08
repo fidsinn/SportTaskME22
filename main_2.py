@@ -62,7 +62,6 @@ class My_variables():
         with open(os.path.join(self.model_name, 'model_info.json'), 'w') as f:
             json.dump(str(self.__dict__.copy()), f, indent=4)
 
-
 '''
 My_stroke class used for encoding the annotations
 '''
@@ -80,10 +79,6 @@ class My_stroke:
 
     def my_print(self, log=None):
         print_and_log('Video : %s\tbegin : %d\tEnd : %d\tClass : %s' % (self.video_path, self.begin, self.end, self.move), log=log)
-
-'''
-
-'''
 
 '''
 My_dataset class which uses My_stroke class to be used in the data loader
@@ -503,9 +498,14 @@ Save the predictions in xml files
 '''
 def save_xml_data(xml_files, path_xml_save):
     for xml_name in xml_files:
-        xml_file = open('%s.xml' % os.path.join(path_xml_save, xml_name), 'wb')
-        xml_file.write(ET.tostring(xml_files[xml_name]))
-        xml_file.close()
+        if not os.path.isfile('%s.xml' % os.path.join(path_xml_save, xml_name)):
+            print('No file in {}: create'.format(os.path.isfile('%s.xml' % os.path.join(path_xml_save, xml_name))))
+            xml_file = open('%s.xml' % os.path.join(path_xml_save, xml_name), 'wb')
+            xml_file.write(ET.tostring(xml_files[xml_name]))
+            xml_file.close()
+        else:
+            print('File in {}: ignore'.format(os.path.isfile('%s.xml' % os.path.join(path_xml_save, xml_name))))
+
 
 '''
 Inference on test set
@@ -513,9 +513,9 @@ Inference on test set
 def test_model(model, args, data_loader, test_include, list_of_strokes=None):
     with torch.no_grad():
         if test_include == 'validation':
-            print('test_model starts...')
-        else:
             print('test_model (val) starts...')
+        else:
+            print('test_model (test) starts...')
         model.eval() # Set model to evaluation mode - needed for batchnorm
         xml_files = {}
         if test_include == 'validation':
@@ -543,9 +543,9 @@ def test_model(model, args, data_loader, test_include, list_of_strokes=None):
 def test_prob_and_vote(model, args, test_list, test_include, list_of_strokes=None):
     with torch.no_grad(): # turn off gradients computation (in combination with model.eval())
         if test_include == 'validation':
-            print('test_prob_and_vote starts...')
-        else:
             print('test_prob_and_vote (val) starts...')
+        else:
+            print('test_prob_and_vote (test) starts...')
         model.eval() # Set model to evaluation mode - needed for batchnorm
         xml_files_vote = {}
         if test_include == 'validation':
@@ -636,7 +636,7 @@ def infer_stroke_list_from_vector(video_path, vector_decision, threshold=30):
     return stroke_list
 
 def compute_strokes_from_predictions(video_path, all_probs, size_data, window_decision=100):
-    # Repeat the first and last prediction to center all predictions #
+    # Repeat the first and last prediction to center all predictions
     predictions = [all_probs[0]]*(size_data[2]//2)
     predictions.extend(all_probs)
     predictions.extend([all_probs[-1]]*(size_data[2]//2))
@@ -769,9 +769,18 @@ def get_classification_strokes(working_folder_task, test_include_set):
     set_path = os.path.join(working_folder_task, 'validation')
     validation_strokes = [My_stroke(os.path.join(set_path, action_class, f), 0, len(os.listdir(os.path.join(set_path, action_class, f))), action_class)
         for action_class in os.listdir(set_path) for f in os.listdir(os.path.join(set_path, action_class))]
-    set_path = os.path.join(working_folder_task, test_include_set)
-    test_strokes = [My_stroke(os.path.join(set_path, f), 0, len(os.listdir(os.path.join(set_path, f))), 'Unknown') for f in os.listdir(set_path)]
-    
+    if test_include_set=='validation':
+        print('working_folder_task:', working_folder_task)
+        print('test_include_set:', test_include_set)
+        set_path = os.path.join(working_folder_task, test_include_set)
+        print('set_path:', set_path)
+        test_strokes = [My_stroke(os.path.join(set_path, action_class, f), 0, len(os.listdir(os.path.join(set_path, action_class, f))), 'Unknown') for f in os.listdir(set_path)
+            for action_class in os.listdir(set_path) for f in os.listdir(os.path.join(set_path, action_class))]
+    else:
+        set_path = os.path.join(working_folder_task, 'test')
+        test_strokes = [My_stroke(os.path.join(set_path, f), 0, len(os.listdir(os.path.join(set_path, f))), 'Unknown') for f in os.listdir(set_path)]
+
+
     # they need to be sorted as list dir gets them in different orderes
     train_strokes.sort(key=lambda x: x.video_path, reverse=True)
     validation_strokes.sort(key=lambda x: x.video_path, reverse=True)
@@ -874,6 +883,8 @@ def get_lists_annotations(task_source, task_path, test_include_set):
     '''
     train_strokes = get_annotations(os.path.join(task_source, 'train'), os.path.join(task_path, 'train'))
     validation_strokes = get_annotations(os.path.join(task_source, 'validation'), os.path.join(task_path, 'validation'))
+    print('!: task_source:',task_source)
+    print('!: task_path:',task_path)
     test_strokes = get_annotations(os.path.join(task_source, test_include_set), os.path.join(task_path, test_include_set))
     return train_strokes, validation_strokes, test_strokes
 
@@ -924,7 +935,7 @@ def detection_task(working_folder, source_folder, data_in, epochs, model_load, m
     # Test process
     load_checkpoint(model, args)
     if test_include is not None:
-        test_model(model, args, test_loader, test_include)
+        test_model(model, args, test_loader, test_include) #!!
         test_prob_and_vote(model, args, test_strokes_list, test_include)
         list_of_test_videos_streams = []
         for path in task_paths:
@@ -958,7 +969,7 @@ def parse_args():
                         choices=['dc', 'd', 'c'],
                         help='dc(detection and classification); d(detection); c(classification)')
     parser.add_argument('--model', '-m',default='V1',
-                        help='choose model from model.py (e.g. V1, V2,...)')
+                        help='choose model from model.py (e.g. V1, V2, V2E...)')
     parser.add_argument('--stream_design1','-sd1',default='rgb',
                         choices=['rgb', 's', 'srgb'],
                         help='rgb; s(skeleton); srgb(skeleton+rgb)')
@@ -993,8 +1004,8 @@ if __name__ == "__main__":
     print()
     print('Start time: ', datetime.datetime.now().strftime('%d/%m/%Y %H:%M:%S'))
 
-    print_and_log('Running Modeling-Task with args: task:{}; model:{}; stream_design1:{}; stream_design2:{}; epochs:{}; model_load_d:{}; model_load_c:{}; log_include:{}'\
-        .format(args.task, args.model, args.stream_design1, args.stream_design2, args.epochs, args.model_load_d, args.model_load_c, args.log_include)
+    print_and_log('Running Modeling-Task with args: task:{}; model:{}; stream_design1:{}; stream_design2:{}; epochs:{}; model_load_d:{}; model_load_c:{}; test_include:{}; log_include:{}'\
+        .format(args.task, args.model, args.stream_design1, args.stream_design2, args.epochs, args.model_load_d, args.model_load_c, args.test_include, args.log_include)
         )
 
     print('Working GPU device:',torch.cuda.get_device_name(torch.cuda.current_device()))
