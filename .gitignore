@@ -1,5 +1,7 @@
 __pycache__/
-data/
+data/classificationTask
+data/detectionTask
+data/slurm_eval_logs
 data_lite/
 tmp/
 private/

@@ -1,14 +1,15 @@
 #!/bin/bash -l 
 #SBATCH --ntasks=1
 #SBATCH --cpus-per-task=12
-#SBATCH --mem=100G
+#SBATCH --mem=50G
 
-#SBATCH --job-name=sporttask_dc_2srgb
 #SBATCH --time=7-00:00:00
 #SBATCH --partition=clara-job
 
 #SBATCH --gres=gpu:v100:1
+#SATCH --gres=gpu:rtx2080ti:2
 
+#SBATCH --job-name=sporttask_c_rgb_srgb_test
 #SBATCH -o GIT/SportTaskME22/working_folder/slurm_logs/%j.%x.out
 #SBATCH -e GIT/SportTaskME22/working_folder/slurm_logs/%j.%x.err
 
@@ -16,7 +17,47 @@ export OMP_NUM_THREADS=$SLURM_CPUS_PER_TASK
 
 cd GIT/SportTaskME22/
 
-module load Anaconda3
 conda activate open-mmlab
 
-srun python main_2.py -t c -m V2 -sd1 rgb -sd2 s -li log
+
+#TEMPLATE
+#srun python main_2.py -t <task> -m <model> -sd1 <stream_design1>  -sd2 <stream_design2> -e <epochs> -mlc <model_load_classification> -mld <model_load_detection> -ti <test_include> -li <log_include>
+
+#TRAINING V2 (EVERYTHING BELOW IS TESTED ON V2)
+#train detection
+#rgb s
+#srun python main_2.py -t d -m V2 -sd1 rgb -sd2 s -e 2000 -li log
+#rgb srgb
+#srun python main_2.py -t d -m V2 -sd1 rgb -sd2 srgb -e 2000 -li log
+
+#train classification
+#rgb s
+#srun python main_2.py -t c -m V2 -sd1 rgb -sd2 s -e 2000 -li log
+#rgb srgb
+#srun python main_2.py -t c -m V2 -sd1 rgb -sd2 srgb -e 2000 -li log
+
+#VALIDATION V2 (EVERYTHING BELOW IS VALIDATED ON V2)
+#validate detection
+#rgb s (with pretrained model)
+#srun python main_2.py -t d -m V2 -sd1 rgb -sd2 s -e 2000 -mld 2022-07-17_17-22-31 -ti validation -li log
+#rgb srgb (with pretrained model)
+#srun python main_2.py -t d -m V2 -sd1 rgb -sd2 srgb -e 2000 -mld 2022-07-21_05-35-24 -ti validation -li log
+
+#validate classification
+#rgb s (with pretrained model)
+#srun python main_2.py -t c -m V2 -sd1 rgb -sd2 s -e 2000 -mlc 2022-07-17_15-54-56 -ti validation -li log
+#rgb srgb (with pretrained model)
+#srun python main_2.py -t c -m V2 -sd1 rgb -sd2 srgb -e 2000 -mlc 2022-07-21_22-25-13 -ti validation -li log
+
+#TESTING V2 (EVERYTHING BELOW IS TESTED ON V2)
+#test detection
+#rgb s (with pretrained model)
+#srun python main_2.py -t d -m V2 -sd1 rgb -sd2 s -e 2000 -mld 2022-07-17_17-22-31 -ti test -li log
+#rgb srgb (with pretrained model)
+#srun python main_2.py -t d -m V2 -sd1 rgb -sd2 srgb -e 2000 -mld 2022-07-21_05-35-24 -ti test -li log
+
+#test classification
+#rgb s (with pretrained model)
+#srun python main_2.py -t c -m V2 -sd1 rgb -sd2 s -e 2000 -mlc 2022-07-17_15-54-56 -ti test -li log
+#rgb srgb (with pretrained model)
+#srun python main_2.py -t c -m V2 -sd1 rgb -sd2 srgb -e 2000 -mlc 2022-07-21_22-25-13 -ti test -li log
