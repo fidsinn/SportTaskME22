@@ -36,7 +36,9 @@ dict_of_moves = ['Serve Forehand Backspin',
 
                 'Defensive Backhand Push',
                 'Defensive Backhand Block',
-                'Defensive Backhand Backspin']
+                'Defensive Backhand Backspin',
+                
+                'Negative']
 
 dict_of_strokes_hand = { 'Serve Forehand Backspin':'Forehand',
                                'Serve Forehand Loop':'Forehand',
@@ -62,9 +64,11 @@ dict_of_strokes_hand = { 'Serve Forehand Backspin':'Forehand',
 
                                'Defensive Backhand Push':'Backhand',
                                'Defensive Backhand Block':'Backhand',
-                               'Defensive Backhand Backspin':'Backhand'}
+                               'Defensive Backhand Backspin':'Backhand',
+                               
+                               'Negative':'Negative'}
 
-list_of_strokes_hand = ['Forehand', 'Backhand']
+list_of_strokes_hand = ['Forehand', 'Backhand', 'Negative']
 
 dict_of_strokes_serve = { 'Serve Forehand Backspin':'Serve',
                                'Serve Forehand Loop':'Serve',
@@ -94,7 +98,7 @@ dict_of_strokes_serve = { 'Serve Forehand Backspin':'Serve',
 
                                'Negative':'Negative'}
 
-list_of_strokes_serve = ['Serve', 'Offensive', 'Defensive']
+list_of_strokes_serve = ['Serve', 'Offensive', 'Defensive', 'Negative']
 
 
 dict_of_strokes_serve_hand = { 'Serve Forehand Backspin':'Serve Forehand',
@@ -121,9 +125,11 @@ dict_of_strokes_serve_hand = { 'Serve Forehand Backspin':'Serve Forehand',
 
                                'Defensive Backhand Push':'Defensive Backhand',
                                'Defensive Backhand Block':'Defensive Backhand',
-                               'Defensive Backhand Backspin':'Defensive Backhand'}
+                               'Defensive Backhand Backspin':'Defensive Backhand',
 
-list_of_strokes_serve_hand = ['Serve Forehand', 'Serve Backhand', 'Offensive Forehand', 'Offensive Backhand', 'Defensive Forehand', 'Defensive Backhand']
+                               'Negative':'Negative'}
+
+list_of_strokes_serve_hand = ['Serve Forehand', 'Serve Backhand', 'Offensive Forehand', 'Offensive Backhand', 'Defensive Forehand', 'Defensive Backhand', 'Negative']
 
 '''
 Function to create the confusion matrix
@@ -194,11 +200,15 @@ def getListOfFiles(dirName):
             allFiles.append(fullPath)
     return allFiles
 
-def evaluate_classification(run_path, set_path):
+def evaluate_classification(run_path, set_path, run):
     # List of the provided videos
     list_of_videos_set = getListOfFiles(set_path)
+    
     # XML filled or created by participant with each line being a video with its classification
-    set_submission = set_path + '.xml'
+    #set_submission = os.getcwd() + '/' + set_path + '.xml'
+    #set_submission = os.getcwd() + '/' + run_path + '/classification' + run + 'test.xml'
+    set_submission = os.path.join(run_path, 'test.xml')
+
     # Get the submission
     tree = ElementTree.parse(set_submission)
     root = tree.getroot()
@@ -213,7 +223,7 @@ def evaluate_classification(run_path, set_path):
     classes_gt = {}
     if set_path.endswith('test'):
         # Specific path for the organizers
-        gt_path = 'private/classificationTask/text.xml'
+        gt_path = 'classificationTask/test.xml'
         if not os.path.exists(gt_path):
             raise ValueError('The gt path %s does not exist.\nOnly the organizers have the gt test xml.' % (gt_path))
         tree = ElementTree.parse(gt_path)
@@ -222,15 +232,19 @@ def evaluate_classification(run_path, set_path):
         for video in root:
             classes_submitted[video.get('name')] = video.get('class')
     else:
+        print('Start with validation groundtruth...')
         for video in list_of_videos_set:
-            video_name = os.path.splitext(os.path.basename(video))[0]
+            #video_name = os.path.splitext(os.path.basename(video))[0]
+            video_name = os.path.basename(video)
             video_class_gt = video.split('/')[-2]
             classes_gt[video_name] = video_class_gt    
 
     # For the confusion matrix we store the ground truth and the predictions
     gt_conf_matrix = []
     prediction_conf_matrix = []
+    numCorrectActions = 0
     numCorrectActions_h = dict()
+    numActions = 0.0
     numActions_h = dict()
     for move in dict_of_moves:
         numCorrectActions_h[move] = 0
@@ -261,18 +275,18 @@ def evaluate_classification(run_path, set_path):
         confusion_matrix(gt_conf_matrix, prediction_conf_matrix, labels=dict_of_moves),
         dict_of_moves,
         os.path.join(run_path, 'cm.png'))
-    plot_confusion_matrix(
-        confusion_matrix([dict_of_strokes_serve_hand[i] for i in gt_conf_matrix], [dict_of_strokes_serve_hand[i] for i in prediction_conf_matrix], labels=list_of_strokes_serve_hand),
-        list_of_strokes_serve_hand,
-        os.path.join(run_path, 'cm_serve_hand.png'))
-    plot_confusion_matrix(
-        confusion_matrix([dict_of_strokes_hand[i] for i in gt_conf_matrix], [dict_of_strokes_hand[i] for i in prediction_conf_matrix], labels=list_of_strokes_hand),
-        list_of_strokes_hand,
-        os.path.join(run_path, 'cm_hand.png'))
-    plot_confusion_matrix(
-        confusion_matrix([dict_of_strokes_serve[i] for i in gt_conf_matrix], [dict_of_strokes_serve[i] for i in prediction_conf_matrix], labels=list_of_strokes_serve),
-        list_of_strokes_serve,
-        os.path.join(run_path, 'cm_serve.png'))
+    # plot_confusion_matrix(
+    #     confusion_matrix([dict_of_strokes_serve_hand[i] for i in gt_conf_matrix], [dict_of_strokes_serve_hand[i] for i in prediction_conf_matrix], labels=dict_of_strokes_hand),
+    #     list_of_strokes_serve_hand,
+    #     os.path.join(run_path, 'cm_serve_hand.png'))
+    # plot_confusion_matrix(
+    #     confusion_matrix([dict_of_strokes_hand[i] for i in gt_conf_matrix], [dict_of_strokes_hand[i] for i in prediction_conf_matrix], labels=list_of_strokes_hand),
+    #     list_of_strokes_hand,
+    #     os.path.join(run_path, 'cm_hand.png'))
+    # plot_confusion_matrix(
+    #     confusion_matrix([dict_of_strokes_serve[i] for i in gt_conf_matrix], [dict_of_strokes_serve[i] for i in prediction_conf_matrix], labels=list_of_strokes_serve),
+    #     list_of_strokes_serve,
+    #     os.path.join(run_path, 'cm_serve.png'))
                 
     accuracy = numCorrectActions / float(numActions)
     print('\nGlobal accuracy={}/{}={}\n'.format(numCorrectActions, numActions, accuracy))
@@ -384,7 +398,7 @@ def evaluate_detection(run_path, set_path):
     # precision_sorted_maxleft = [max(precision_sorted[idx:]) for idx in range(len(precision_sorted))]
     # AP = (precision_sorted_maxleft*(np.append(recall_sorted[0],recall_sorted[1:]-recall_sorted[:-1]))).sum()
 
-    for idx in [0,5]:
+    for idx, item in enumerate(iou_thresholds):#[0, 5, 9]:
         print("With IoU threshold of %g" % iou_thresholds[idx])
         print('\tPrecision: %f, Recall: %f, dedicated AP: %f' % (precision[idx], recall[idx], precision[idx]*recall[idx]))
     print("\nMean Average Precision at IoU=.50:.05:.95 = %f" % np.mean(precision*recall))
@@ -397,40 +411,43 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description = 'Evaluation of the participant')
     parser.add_argument('--path', '-p', help='Folder path in which you have the subfolders classificationTask and detectionTask containg subfolders representings the runs in which there are the xml files filled')
     parser.add_argument('--set_path', '-sp', nargs='?', default='testGT', help='Set on which the run has been done (per default test but you may run some checks on your validation and train sets too)')
+    parser.add_argument('--task', '-t', default='cd')
     args = parser.parse_args()
 
     if args.set_path not in ['train', 'validation', 'test', 'testGT']:
         raise ValueError('Please provide a correct set name (train, validation or test')
 
-    classification_path = os.path.join(args.path, "classificationTask")
-    if os.path.isdir(classification_path):
-        print('\nClassification task:')
-        idx=0
-        for idx, run in enumerate(os.listdir(classification_path)):
-            run_path = os.path.join(classification_path, run)
-            if os.path.isdir(run_path):
-                idx+=1
-                print('\nRun %d (%s):' % (idx, run))
-                try:
-                    evaluate_classification(run_path, os.path.join("classificationTask", args.set_path))
-                except ValueError as error:
-                    print(error)
-                    continue
+    if (args.task == 'cd') or (args.task == 'c'):
+        classification_path = os.path.join(args.path, "classificationTask")
+        if os.path.isdir(classification_path):
+            print('\nClassification task:')
+            idx=0
+            for idx, run in enumerate(os.listdir(classification_path)):
+                run_path = os.path.join(classification_path, run)
+                print('run_path', run_path)
+                if os.path.isdir(run_path):
+                    idx+=1
+                    print('\nRun %d (%s):' % (idx, run))
+                    try:
+                        evaluate_classification(run_path, os.path.join("classificationTask", args.set_path), run)
+                    except ValueError as error:
+                        print(error)
+                        continue
 
-            
-    detection_path = os.path.join(args.path, "detectionTask")
-    if os.path.isdir(detection_path):
-        print('\nDetection task:')
-        idx=0
-        for idx, run in enumerate(os.listdir(detection_path)):
-            run_path = os.path.join(detection_path, run)
-            if os.path.isdir(run_path):
-                idx+=1
-                print('\nRun %d (%s)' % (idx, run))
-                try:
-                    evaluate_detection(run_path, os.path.join("detectionTask", args.set_path))
-                except ValueError as error:
-                    print(error)
-                    continue
+    if (args.task == 'cd') or (args.task == 'd'):        
+        detection_path = os.path.join(args.path, "detectionTask")
+        if os.path.isdir(detection_path):
+            print('\nDetection task:')
+            idx=0
+            for idx, run in enumerate(os.listdir(detection_path)):
+                run_path = os.path.join(detection_path, run)
+                if os.path.isdir(run_path):
+                    idx+=1
+                    print('\nRun %d (%s)' % (idx, run))
+                    try:
+                        evaluate_detection(run_path, os.path.join("detectionTask", args.set_path))
+                    except ValueError as error:
+                        print(error)
+                        continue
     
     print('Evaluation done')
