@@ -741,7 +741,11 @@ class CNNAttentionNetV2E_TwoStream(nn.Module):
             self.cuda()
 
     # unidirectional fusion s2 in s1
+<<<<<<< HEAD
     def fusion(self, features_s1, features_s2, fusion_perc = 0.5):
+=======
+    def fusion(self, features_s1, features_s2, fusion_perc = 0.7):
+>>>>>>> finn_branch
         s1 = features_s1 * (1 - fusion_perc) + features_s2 * fusion_perc
         s2 = features_s2
         return s1, s2
