@@ -161,6 +161,8 @@ def plot_confusion_matrix(cm, classes, save_path, cmap=plt.cm.Blues):
     plt.ylabel('True label', fontsize=14)
     plt.xlabel('Predicted label', fontsize=14)
     plt.tight_layout()
+    if os.path.exists(save_path):
+        os.remove(save_path)
     plt.savefig(save_path)
     plt.close('all')
 
@@ -271,22 +273,26 @@ def evaluate_classification(run_path, set_path, run):
             numCorrectActions += 1
 
     # Save different confusions matrices
+    print('cf1 y_true', gt_conf_matrix)
+    print('cf1 y_pred', prediction_conf_matrix)
     plot_confusion_matrix(
         confusion_matrix(gt_conf_matrix, prediction_conf_matrix, labels=dict_of_moves),
         dict_of_moves,
         os.path.join(run_path, 'cm.png'))
-    # plot_confusion_matrix(
-    #     confusion_matrix([dict_of_strokes_serve_hand[i] for i in gt_conf_matrix], [dict_of_strokes_serve_hand[i] for i in prediction_conf_matrix], labels=dict_of_strokes_hand),
-    #     list_of_strokes_serve_hand,
-    #     os.path.join(run_path, 'cm_serve_hand.png'))
-    # plot_confusion_matrix(
-    #     confusion_matrix([dict_of_strokes_hand[i] for i in gt_conf_matrix], [dict_of_strokes_hand[i] for i in prediction_conf_matrix], labels=list_of_strokes_hand),
-    #     list_of_strokes_hand,
-    #     os.path.join(run_path, 'cm_hand.png'))
-    # plot_confusion_matrix(
-    #     confusion_matrix([dict_of_strokes_serve[i] for i in gt_conf_matrix], [dict_of_strokes_serve[i] for i in prediction_conf_matrix], labels=list_of_strokes_serve),
-    #     list_of_strokes_serve,
-    #     os.path.join(run_path, 'cm_serve.png'))
+    print('cf2 y_true', [dict_of_strokes_serve_hand[i] for i in gt_conf_matrix])
+    print('cf2 y_pred', [dict_of_strokes_serve_hand[i] for i in prediction_conf_matrix])
+    plot_confusion_matrix(
+        confusion_matrix([dict_of_strokes_serve_hand[i] for i in gt_conf_matrix], [dict_of_strokes_serve_hand[i] for i in prediction_conf_matrix]),
+        list_of_strokes_serve_hand,
+        os.path.join(run_path, 'cm_serve_hand.png'))
+    plot_confusion_matrix(
+        confusion_matrix([dict_of_strokes_hand[i] for i in gt_conf_matrix], [dict_of_strokes_hand[i] for i in prediction_conf_matrix], labels=list_of_strokes_hand),
+        list_of_strokes_hand,
+        os.path.join(run_path, 'cm_hand.png'))
+    plot_confusion_matrix(
+        confusion_matrix([dict_of_strokes_serve[i] for i in gt_conf_matrix], [dict_of_strokes_serve[i] for i in prediction_conf_matrix], labels=list_of_strokes_serve),
+        list_of_strokes_serve,
+        os.path.join(run_path, 'cm_serve.png'))
                 
     accuracy = numCorrectActions / float(numActions)
     print('\nGlobal accuracy={}/{}={}\n'.format(numCorrectActions, numActions, accuracy))
@@ -398,7 +404,7 @@ def evaluate_detection(run_path, set_path):
     # precision_sorted_maxleft = [max(precision_sorted[idx:]) for idx in range(len(precision_sorted))]
     # AP = (precision_sorted_maxleft*(np.append(recall_sorted[0],recall_sorted[1:]-recall_sorted[:-1]))).sum()
 
-    for idx, item in enumerate(iou_thresholds):#[0, 5, 9]:
+    for idx, item in [0, 5, 9]:
         print("With IoU threshold of %g" % iou_thresholds[idx])
         print('\tPrecision: %f, Recall: %f, dedicated AP: %f' % (precision[idx], recall[idx], precision[idx]*recall[idx]))
     print("\nMean Average Precision at IoU=.50:.05:.95 = %f" % np.mean(precision*recall))
@@ -439,7 +445,7 @@ if __name__ == "__main__":
         if os.path.isdir(detection_path):
             print('\nDetection task:')
             idx=0
-            for idx, run in enumerate(os.listdir(detection_path)):
+            for idx, run in enumerate(os.listdir(detection_path).sort()):
                 run_path = os.path.join(detection_path, run)
                 if os.path.isdir(run_path):
                     idx+=1

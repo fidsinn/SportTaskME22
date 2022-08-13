@@ -591,11 +591,11 @@ def test_prob_and_vote(model, args, test_list, test_include, list_of_strokes=Non
                 predictions.extend(predicted.tolist())
 
             middle = int(len(all_probs)/2)
-            print('index:', idx)
-            print('test_set:', test_set)
-            print('stroke0:', stroke[0])
-            print('stroke1:', stroke[1])
-            print('all_probs before gaussian:',all_probs)
+            # print('index:', idx)
+            # print('test_set:', test_set)
+            # print('stroke0:', stroke[0])
+            # print('stroke1:', stroke[1])
+            # print('all_probs before gaussian:',all_probs)
             prob_gaussian = cv2.GaussianBlur(np.array(all_probs), (1, 2*middle+1), 0) # sigma = 0.3*((ksize-1)*0.5 - 1) + 0.8
             prob_mean = np.mean(all_probs,0)
 
@@ -940,18 +940,18 @@ def detection_task(working_folder, source_folder, data_in, epochs, model_load, m
     # Test process
     load_checkpoint(model, args)
     if test_include is not None:
-        #test_model(model, args, test_loader, test_include) #!!
-        test_prob_and_vote(model, args, test_strokes_list, test_include)
-        # list_of_test_videos_streams = []
-        # for path in task_paths:
-        #     print('test_paths', task_paths)
-        #     print('test_path', path)
-        #     test_videos = get_videos_list(os.path.join(path, test_include_set))
-        #     print('test_videos', test_videos)
-        #     list_of_test_videos_streams.append(test_videos)
-        # print('list_of_test_videos_streams', list_of_test_videos_streams)
-        # #list_of_test_videos = get_videos_list(os.path.join(task_paths, 'test')) #??? what is task_path here?
-        # test_videos_segmentation(model, args, list_of_test_videos_streams, test_include) #??? what is task_path here?
+        test_model(model, args, test_loader, test_include) #!!
+        #test_prob_and_vote(model, args, test_strokes_list, test_include)
+        list_of_test_videos_streams = []
+        for path in task_paths:
+            print('test_paths', task_paths)
+            print('test_path', path)
+            test_videos = get_videos_list(os.path.join(path, test_include_set))
+            print('test_videos', test_videos)
+            list_of_test_videos_streams.append(test_videos)
+        print('list_of_test_videos_streams', list_of_test_videos_streams)
+        #list_of_test_videos = get_videos_list(os.path.join(task_paths, 'test')) #??? what is task_path here?
+        test_videos_segmentation(model, args, list_of_test_videos_streams, test_include) #??? what is task_path here?
     return 1
 
 def test_stream_design(working_folder, test_include):
