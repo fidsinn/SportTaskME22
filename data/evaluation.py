@@ -401,7 +401,7 @@ def evaluate_detection(run_path, set_path):
     # AP = (precision_sorted_maxleft*(np.append(recall_sorted[0],recall_sorted[1:]-recall_sorted[:-1]))).sum()
 
     #for idx, item in enumerate(iou_thresholds):
-    for idx in [0, 5]:
+    for idx in [0, 5, 9]:
         print("With IoU threshold of %g" % iou_thresholds[idx])
         print('\tPrecision: %f, Recall: %f, dedicated AP: %f' % (precision[idx], recall[idx], precision[idx]*recall[idx]))
     print("\nMean Average Precision at IoU=.50:.05:.95 = %f" % np.mean(precision*recall))

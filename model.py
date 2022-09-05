@@ -541,9 +541,7 @@ class CNNAttentionNetV2L_TwoStream(nn.Module):
         features_s1 = self.linear2_s1(features_s1)
         features_s2 = self.linear2_s2(features_s2)
 
-        #feature_final = torch.cat((features_s1,features_s2), dim=1)
-        feature_final = torch.stack((features_s1,features_s2), dim=1)
-        #feature_final = torch.cat(torch.stack((features_s1,features_s2), dim=1), dim=1)
+        feature_final = torch.cat((features_s1,features_s2), dim=1)
         feature_final = self.linear_fuse(feature_final)
 
         return self.final(feature_final)
@@ -663,14 +661,9 @@ class CNNAttentionNetV2C_TwoStream(nn.Module):
         if cuda:
             self.cuda()
 
-    # def fusion(self, features_s1, features_s2, fusion_perc = 0.3):
-    #     fused = features_s1 * (1 - fusion_perc) + features_s2 * fusion_perc
-    #     return fused
     def fusion(self, features_s1, features_s2, fusion_perc = 0.3):
-        if features_s1 > features_s2:
-            return features_s1
-        else:
-            return features_s2
+        fused = features_s1 * (1 - fusion_perc) + features_s2 * fusion_perc
+        return fused
 
     def forward(self, features_s1, features_s2):
 
@@ -759,11 +752,7 @@ class CNNAttentionNetV2E_TwoStream(nn.Module):
             self.cuda()
 
     # unidirectional fusion s2 in s1
-<<<<<<< HEAD
     def fusion(self, features_s1, features_s2, fusion_perc = 0.5):
-=======
-    def fusion(self, features_s1, features_s2, fusion_perc = 0.7):
->>>>>>> finn_branch
         s1 = features_s1 * (1 - fusion_perc) + features_s2 * fusion_perc
         s2 = features_s2
         return s1, s2
