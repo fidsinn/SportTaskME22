@@ -433,6 +433,9 @@ class CNNAttentionNetV2_Stream(nn.Module):
         features = self.linear2(features)
         return features
 
+'''
+Version 1 of CNNAttentionNet including TwoStream approach
+'''
 class CNNAttentionNetV1_TwoStream(nn.Module):
     def __init__(self, size_data, n_classes, in_dim=3, filters=[8,16,32,64,128,256], cuda=True):
         super(CNNAttentionNetV1_TwoStream, self).__init__()
@@ -451,6 +454,9 @@ class CNNAttentionNetV1_TwoStream(nn.Module):
         s2_out = self.stream_two(features_s2)
         return self.final(s1_out + s2_out)
 
+'''
+Version 2 of CNNAttentionNet including TwoStream approach
+'''
 class CNNAttentionNetV2_TwoStream(nn.Module):
     def __init__(self, size_data, n_classes, in_dim=3, filters=[32,64,128,256,512], cuda=True):
         super(CNNAttentionNetV2_TwoStream, self).__init__()
@@ -470,7 +476,9 @@ class CNNAttentionNetV2_TwoStream(nn.Module):
         s2_out = self.stream_two(features_s2)
         return self.final(s1_out + s2_out)
 
-
+'''
+Version 2 of CNNAttentionNet TwoStream including late fusion
+'''
 class CNNAttentionNetV2L_TwoStream(nn.Module):
     def __init__(self, size_data, n_classes, in_dim=3, filters=[32,64,128,256,512], cuda=True):
         super(CNNAttentionNetV2L_TwoStream, self).__init__()
@@ -533,11 +541,16 @@ class CNNAttentionNetV2L_TwoStream(nn.Module):
         features_s1 = self.linear2_s1(features_s1)
         features_s2 = self.linear2_s2(features_s2)
 
-        feature_final = torch.cat((features_s1,features_s2), dim=1)
+        #feature_final = torch.cat((features_s1,features_s2), dim=1)
+        feature_final = torch.stack((features_s1,features_s2), dim=1)
+        #feature_final = torch.cat(torch.stack((features_s1,features_s2), dim=1), dim=1)
         feature_final = self.linear_fuse(feature_final)
 
         return self.final(feature_final)
 
+'''
+Version 2 of CNNAttentionNet TwoStream including middle fusion
+'''
 class CNNAttentionNetV2M_TwoStream(nn.Module):
     def __init__(self, size_data, n_classes, in_dim=3, filters=[32,64,128,256,512], cuda=True):
         super(CNNAttentionNetV2M_TwoStream, self).__init__()
@@ -598,8 +611,9 @@ class CNNAttentionNetV2M_TwoStream(nn.Module):
 
         return self.final(features)
         
-# continuas fusion after every layer
-
+'''
+Version 2 of CNNAttentionNet TwoStream including continuous early fusion
+'''
 class CNNAttentionNetV2C_TwoStream(nn.Module):
     def __init__(self, size_data, n_classes, in_dim=3, filters=[32,64,128,256,512], cuda=True):
         super(CNNAttentionNetV2C_TwoStream, self).__init__()
@@ -649,9 +663,14 @@ class CNNAttentionNetV2C_TwoStream(nn.Module):
         if cuda:
             self.cuda()
 
+    # def fusion(self, features_s1, features_s2, fusion_perc = 0.3):
+    #     fused = features_s1 * (1 - fusion_perc) + features_s2 * fusion_perc
+    #     return fused
     def fusion(self, features_s1, features_s2, fusion_perc = 0.3):
-        fused = features_s1 * (1 - fusion_perc) + features_s2 * fusion_perc
-        return fused
+        if features_s1 > features_s2:
+            return features_s1
+        else:
+            return features_s2
 
     def forward(self, features_s1, features_s2):
 
@@ -672,7 +691,6 @@ class CNNAttentionNetV2C_TwoStream(nn.Module):
 
         features_s1 = self.linear2_s1(features_s1 + features_s2)
         features_s2 = self.linear2_s2(features_s2)
-
 
         return self.final(features_s1 + features_s2)
 
