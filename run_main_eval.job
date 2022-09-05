@@ -3,7 +3,7 @@
 #SBATCH --cpus-per-task=2
 #SBATCH --mem=50G
 
-#SBATCH --job-name=sporttask_eval_runs_val
+#SBATCH --job-name=eval_rgb_srgb-_-g-m-v
 #SBATCH --time=7-00:00:00
 #SBATCH --partition=clara-job
 
@@ -27,5 +27,5 @@ conda activate open-mmlab
 # 1. create a new folder called slurm_eval_logs in /data
 # 2. set data/team_name to data/Uni_Leipzig
 # 3. insert the .xml-files from working_folder models to /Uni_Leipzig
-srun python evaluation.py -p Uni_Leipzig -sp validation
+srun python evaluation.py -p Uni_Leipzig -sp validation -t cd
 #srun python evaluation.py -p Uni_Leipzig -sp test

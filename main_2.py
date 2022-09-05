@@ -94,7 +94,7 @@ class My_dataset(Dataset):
         return len(self.dataset_list_1)
 
     def __getitem__(self, idx):
-        frames_1, frames_2 = get_data(self.dataset_list_1[idx].video_path, self.dataset_list_2[idx].video_path, self.dataset_list_2[idx].begin, self.dataset_list_2[idx].end, self.size_data, self.augmentation) #??? where is the .begin and .end from original main?
+        frames_1, frames_2 = get_data(self.dataset_list_1[idx].video_path, self.dataset_list_2[idx].video_path, self.dataset_list_2[idx].begin, self.dataset_list_2[idx].end, self.size_data, self.augmentation)
         sample = {'stream_1': torch.FloatTensor(frames_1), 'stream_2': torch.FloatTensor(frames_2), 'label' : self.dataset_list_1[idx].move, 'my_stroke' : {'video_path':self.dataset_list_1[idx].video_path, 'begin':self.dataset_list_1[idx].begin, 'end':self.dataset_list_1[idx].end}}
         return sample
 
@@ -296,7 +296,6 @@ Model Architecture
 def make_architecture(args, output_size):
     print_and_log('Make Model', log=args.log)
     model = 'CNNAttentionNet' + args.model + '_TwoStream(args.size_data.copy(), output_size)'
-    #model = CNNAttentionNetV2_TwoStream(args.size_data.copy(), output_size) #??? args.model eval(...)
     model = eval(model)
     print_and_log('Model %s created' % (model.__class__.__name__), log=args.log)
     ## Use GPU
@@ -620,13 +619,10 @@ def infer_stroke_list_from_vector(video_path, vector_decision, threshold=30):
     '''
     Segment the vector in strokes according to min threshold. Note: there is no maximun threshold
     '''
-    #print('vector_decision before z.599:', vector_decision) #!!
     vector_decision = np.array(vector_decision)>0
-    #print('vector_decision after z.601:', vector_decision) #!!
     begin = -1
     stroke_list = []
     for idx, frame_decision in enumerate(vector_decision):
-        #print('frame_decision loop:', frame_decision, 'begin:', begin, 'index:', idx) #!!
         if frame_decision and begin==-1:
             begin = idx
         elif not frame_decision and begin != -1:
@@ -637,7 +633,6 @@ def infer_stroke_list_from_vector(video_path, vector_decision, threshold=30):
     if frame_decision and begin != -1:
         if idx-begin>=threshold:
             stroke_list.append(My_stroke(video_path, begin, idx, 1))
-    #print('stroke_list z.616:', stroke_list) #!!
     return stroke_list
 
 def compute_strokes_from_predictions(video_path, all_probs, size_data, window_decision=100):
@@ -734,12 +729,7 @@ def test_videos_segmentation(model, args, test_list, test_include, sum_stroke_sc
                 output = model(stream_1, stream_2)                
                 all_probs.extend(output.data.tolist())
 
-            #print('stroke[0]', stroke[0]) #!!
-            #print('stroke[0].video_path into z.691:', stroke[0].video_path) #!!
             vote_strokes, mean_strokes, gaussian_strokes = compute_strokes_from_predictions(stroke[0].video_path, all_probs, args.size_data)
-            #print('vote_strokes:', vote_strokes) #!!
-            #print('mean_strokes:', mean_strokes) #!!
-            #print('gaussian_strokes:', gaussian_strokes) #!!
 
             store_stroke_to_xml(vote_strokes, xml_files_vote)
             store_stroke_to_xml(mean_strokes, xml_files_mean)
@@ -845,8 +835,8 @@ def classification_task(working_folder, data_in, epochs, model_load, model, test
     if test_include is not None:
         test_model(model, args, test_loader, test_include, list_of_strokes=LIST_OF_STROKES)
         test_prob_and_vote(model, args, test_strokes_list, test_include, list_of_strokes=LIST_OF_STROKES)
-        if test_strokes_segmentation is not None: #??? what is task_path here?
-            test_videos_segmentation(model, args, test_strokes_segmentation, test_include, sum_stroke_scores=True) #??? what is task_path here?
+        if test_strokes_segmentation is not None:
+            test_videos_segmentation(model, args, test_strokes_segmentation, test_include, sum_stroke_scores=True)
     return 1
 
 '''
@@ -940,7 +930,7 @@ def detection_task(working_folder, source_folder, data_in, epochs, model_load, m
     # Test process
     load_checkpoint(model, args)
     if test_include is not None:
-        #test_model(model, args, test_loader, test_include) #!!
+        test_model(model, args, test_loader, test_include) #!!
         test_prob_and_vote(model, args, test_strokes_list, test_include)
         list_of_test_videos_streams = []
         for path in task_paths:
