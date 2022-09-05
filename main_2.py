@@ -940,8 +940,8 @@ def detection_task(working_folder, source_folder, data_in, epochs, model_load, m
     # Test process
     load_checkpoint(model, args)
     if test_include is not None:
-        test_model(model, args, test_loader, test_include) #!!
-        #test_prob_and_vote(model, args, test_strokes_list, test_include)
+        #test_model(model, args, test_loader, test_include) #!!
+        test_prob_and_vote(model, args, test_strokes_list, test_include)
         list_of_test_videos_streams = []
         for path in task_paths:
             print('test_paths', task_paths)
@@ -950,8 +950,8 @@ def detection_task(working_folder, source_folder, data_in, epochs, model_load, m
             print('test_videos', test_videos)
             list_of_test_videos_streams.append(test_videos)
         print('list_of_test_videos_streams', list_of_test_videos_streams)
-        #list_of_test_videos = get_videos_list(os.path.join(task_paths, 'test')) #??? what is task_path here?
-        test_videos_segmentation(model, args, list_of_test_videos_streams, test_include) #??? what is task_path here?
+        #list_of_test_videos = get_videos_list(os.path.join(task_paths, 'test'))
+        test_videos_segmentation(model, args, list_of_test_videos_streams, test_include)
     return 1
 
 def test_stream_design(working_folder, test_include):

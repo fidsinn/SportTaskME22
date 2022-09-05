@@ -13,3 +13,5 @@ mmpose_utils/tmp/
 __pycache__/
 data_state
 test_file_finn.py
+data/Uni_Leipzig/classificationTask
+data/Uni_Leipzig/detectionTask

@@ -273,14 +273,10 @@ def evaluate_classification(run_path, set_path, run):
             numCorrectActions += 1
 
     # Save different confusions matrices
-    print('cf1 y_true', gt_conf_matrix)
-    print('cf1 y_pred', prediction_conf_matrix)
     plot_confusion_matrix(
         confusion_matrix(gt_conf_matrix, prediction_conf_matrix, labels=dict_of_moves),
         dict_of_moves,
         os.path.join(run_path, 'cm.png'))
-    print('cf2 y_true', [dict_of_strokes_serve_hand[i] for i in gt_conf_matrix])
-    print('cf2 y_pred', [dict_of_strokes_serve_hand[i] for i in prediction_conf_matrix])
     plot_confusion_matrix(
         confusion_matrix([dict_of_strokes_serve_hand[i] for i in gt_conf_matrix], [dict_of_strokes_serve_hand[i] for i in prediction_conf_matrix]),
         list_of_strokes_serve_hand,
@@ -404,7 +400,8 @@ def evaluate_detection(run_path, set_path):
     # precision_sorted_maxleft = [max(precision_sorted[idx:]) for idx in range(len(precision_sorted))]
     # AP = (precision_sorted_maxleft*(np.append(recall_sorted[0],recall_sorted[1:]-recall_sorted[:-1]))).sum()
 
-    for idx, item in [0, 5, 9]:
+    #for idx, item in enumerate(iou_thresholds):
+    for idx in [0, 5]:
         print("With IoU threshold of %g" % iou_thresholds[idx])
         print('\tPrecision: %f, Recall: %f, dedicated AP: %f' % (precision[idx], recall[idx], precision[idx]*recall[idx]))
     print("\nMean Average Precision at IoU=.50:.05:.95 = %f" % np.mean(precision*recall))
@@ -428,7 +425,7 @@ if __name__ == "__main__":
         if os.path.isdir(classification_path):
             print('\nClassification task:')
             idx=0
-            for idx, run in enumerate(os.listdir(classification_path)):
+            for idx, run in enumerate(sorted(os.listdir(classification_path))):
                 run_path = os.path.join(classification_path, run)
                 print('run_path', run_path)
                 if os.path.isdir(run_path):
@@ -445,7 +442,7 @@ if __name__ == "__main__":
         if os.path.isdir(detection_path):
             print('\nDetection task:')
             idx=0
-            for idx, run in enumerate(os.listdir(detection_path).sort()):
+            for idx, run in enumerate(sorted(os.listdir(detection_path))):
                 run_path = os.path.join(detection_path, run)
                 if os.path.isdir(run_path):
                     idx+=1
