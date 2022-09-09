@@ -1029,18 +1029,18 @@ if __name__ == "__main__":
 
     #TODO: cant we uncomment that part? Because everything is preprocessed already. Think it would be cleaner for final submission
     # Prepare work tree (respect levels for correct extraction of the frames)
-    # create_working_tree(working_folder, source_folder, args.stream_design2, frame_width=320, log=log)
+    create_working_tree(working_folder, source_folder, args.stream_design2, frame_width=320, log=log)
     print_and_log('Working tree created in %ds' % (time.time()-start_time), log=log)
 
     epochs = int(args.epochs)
 
     # Tasks
-    if args.task=='dc':
-        detection_task(working_folder, source_folder, data_in, epochs, args.model_load_d, args.model, args.test_include, log=log)
-        classification_task(working_folder, data_in, epochs, args.model_load_c, args.model, args.test_include, log=log)
-    elif args.task=='d':
-        detection_task(working_folder, source_folder, data_in, epochs, args.model_load_d, args.model, args.test_include, log=log)
-    elif args.task=='c':
-        classification_task(working_folder, data_in, epochs, args.model_load_c, args.model, args.test_include, log=log)
+    # if args.task=='dc':
+    #     detection_task(working_folder, source_folder, data_in, epochs, args.model_load_d, args.model, args.test_include, log=log)
+    #     classification_task(working_folder, data_in, epochs, args.model_load_c, args.model, args.test_include, log=log)
+    # elif args.task=='d':
+    #     detection_task(working_folder, source_folder, data_in, epochs, args.model_load_d, args.model, args.test_include, log=log)
+    # elif args.task=='c':
+    #     classification_task(working_folder, data_in, epochs, args.model_load_c, args.model, args.test_include, log=log)
     
     print_and_log('All Done in %ds' % (time.time()-start_time), log=log)

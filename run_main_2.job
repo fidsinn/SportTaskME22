@@ -1,7 +1,7 @@
 #!/bin/bash -l 
 #SBATCH --ntasks=1
 #SBATCH --cpus-per-task=12
-#SBATCH --mem=50G
+#SBATCH --mem=200G
 
 #SBATCH --time=7-00:00:00
 #SBATCH --partition=clara-job
@@ -9,7 +9,7 @@
 #SBATCH --gres=gpu:v100:1
 #SATCH --gres=gpu:rtx2080ti:2
 
-#SBATCH --job-name=sporttask_c_rgb_srgb_test
+#SBATCH --job-name=sport_create_wrong_vid
 #SBATCH -o GIT/SportTaskME22/working_folder/slurm_logs/%j.%x.out
 #SBATCH -e GIT/SportTaskME22/working_folder/slurm_logs/%j.%x.err
 
@@ -18,7 +18,6 @@ export OMP_NUM_THREADS=$SLURM_CPUS_PER_TASK
 cd GIT/SportTaskME22/
 
 conda activate open-mmlab
-
 
 #TEMPLATE
 #srun python main_2.py -t <task> -m <model> -sd1 <stream_design1>  -sd2 <stream_design2> -e <epochs> -mlc <model_load_classification> -mld <model_load_detection> -ti <test_include> -li <log_include>
@@ -34,7 +33,7 @@ conda activate open-mmlab
 #rgb s
 #srun python main_2.py -t c -m V2 -sd1 rgb -sd2 s -e 2000 -li log
 #rgb srgb
-#srun python main_2.py -t c -m V2 -sd1 rgb -sd2 srgb -e 2000 -li log
+#srun python main_2.py -t c -m V2L -sd1 rgb -sd2 srgb -e 2000 -li log
 
 #VALIDATION V2 (EVERYTHING BELOW IS VALIDATED ON V2)
 #validate detection
@@ -61,3 +60,5 @@ conda activate open-mmlab
 #srun python main_2.py -t c -m V2 -sd1 rgb -sd2 s -e 2000 -mlc 2022-07-17_15-54-56 -ti test -li log
 #rgb srgb (with pretrained model)
 #srun python main_2.py -t c -m V2 -sd1 rgb -sd2 srgb -e 2000 -mlc 2022-07-21_22-25-13 -ti test -li log
+
+srun python main_2.py -t c -m V2 -sd1 rgb -sd2 srgb -e 2000
