@@ -94,16 +94,17 @@ def get_skeleton_frames(model_det, model_pos, frame_paths):
     num_frame = len(frame_paths)
     # Get Human detection results
     det_results = detection_inference(model_det, det_score_thr, frame_paths)
-    torch.cuda.empty_cache()
+    torch.cuda.empty_cache() #!! deleted frame in cache?
     
     # Get pose detection results
     pose_results = pose_inference(model_pos, frame_paths, det_results)
-    torch.cuda.empty_cache()
+    torch.cuda.empty_cache() #!! deleted frame in cache?
 
     # visualise skeleton on black background with same dimensions as video
     # TODO: remove static dimension and make them dynamicly set to in video dims
     vis_frames_s = []
     for i in range(num_frame):
+        print('frame:', i)
         if len(pose_results[i]) >= 1:
             vis_frames_s.append(vis_pose_result(model_pos, 
                             np.zeros(shape=[1080, 1920, 3]),
@@ -192,9 +193,11 @@ def create_working_tree(working_folder, source_folder, stream_design, frame_widt
 
         progress_bar(idx, len(list_of_videos), 'Frame + Pose extraction of:\n%s\n' % (video_path))
 
+        frames_path_rgb = os.path.join(working_folder + '/rgb/', '/'.join(os.path.splitext(video_path)[0].split('/')[1:]))
         frames_path_s = os.path.join(working_folder + '/s/', '/'.join(os.path.splitext(video_path)[0].split('/')[1:]))
         frames_path_srgb = os.path.join(working_folder + '/srgb/', '/'.join(os.path.splitext(video_path)[0].split('/')[1:]))
-        frames_path_rgb = os.path.join(working_folder + '/rgb/', '/'.join(os.path.splitext(video_path)[0].split('/')[1:]))
+        print('video_path',video_path)
+        print('frames_path_rgb',frames_path_rgb)
         
         if stream_design == 'rgb':
             fp = frames_path_rgb
@@ -212,7 +215,11 @@ def create_working_tree(working_folder, source_folder, stream_design, frame_widt
             
             # get paths to rgb frames to performe pose estimation
             paths_rgb = getListOfFiles(frames_path_rgb)
+            print('paths_rgb', paths_rgb)
+            paths_rgb.sort()
+            print('paths_rgb', paths_rgb)
             num_frames = len(paths_rgb)
+            print('num_frames',num_frames)
 
             # batch the frame extraction to be more frindly to memory 
             # and to avoid process termination by server
@@ -239,7 +246,7 @@ def create_working_tree(working_folder, source_folder, stream_design, frame_widt
                 for i, frame in enumerate(frames_srgb):
                     save_frame(frame, frame_width, frames_path_srgb, (i + num_frames - rest))
                 
-        gc.collect()
+        #gc.collect() #!!
         progress_bar(idx+1, len(list_of_videos), 'Frame + Pose extraction done in %ds\n' % (time.time() - start_time), 1, log=log)
 
     return 1
