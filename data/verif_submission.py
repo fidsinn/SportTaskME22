@@ -6,7 +6,9 @@ import cv2, pdb
 from xml.etree import ElementTree
 import operator
 
-dict_of_moves = ['Serve Forehand Backspin',
+dict_of_moves = ['Negative',
+
+                'Serve Forehand Backspin',
                 'Serve Forehand Loop',
                 'Serve Forehand Sidespin',
                 'Serve Forehand Topspin',
@@ -63,9 +65,9 @@ def check_classification_run(run_path, set_path):
     # List of the provided videos
     list_of_videos_set = getListOfFiles(set_path)
     # XML filled or created by participant with each line being a video with its classification
-    set_submission = set_path + '.xml'
+    xml_submitted = os.path.join(run_path, os.listdir(run_path)[0])
     # Get the submission
-    tree = ElementTree.parse(set_submission)
+    tree = ElementTree.parse(xml_submitted)
     root = tree.getroot()
     classes_submitted = {}
     for video in root:
@@ -75,16 +77,51 @@ def check_classification_run(run_path, set_path):
         output += '\nNot the same number of videos in the set and in the submission'
 
     for video in list_of_videos_set:
-        video_name = os.path.splitext(os.path.basename(video))[0]
+        video_name = os.path.basename(video)
         if video_name not in classes_submitted.keys():
             output += '\n%s not found in submission' % (video_name)
         elif classes_submitted[video_name] not in dict_of_moves:
-            output += '\n%s: Class %s unknown for video %s' % (classes_submitted[video_name], video_name)
+            output += '\nClass %s unknown for video %s' % (classes_submitted[video_name], video_name)
 
     if output == '':
         return 'OK'
     else:
         return output
+
+# def check_classification_run(run_path, set_path):
+#     # Output to return listing all errors
+#     output = ''
+#     # List of the provided videos
+#     print('run_path',run_path)
+#     print('set_path',set_path)
+#     list_of_videos_set = getListOfFiles(set_path)
+#     # XML filled or created by participant with each line being a video with its classification
+#     set_submission = set_path + '.xml'
+#     # Get the submission
+#     tree = ElementTree.parse(set_submission)
+#     root = tree.getroot()
+#     classes_submitted = {}
+#     for video in root:
+#         classes_submitted[video.get('name')] = video.get('class')
+#         #print('video.get("name")', video.get('name'))
+#         #print('video.get("class")', video.get('class'))
+
+#     if len(list_of_videos_set)!=len(classes_submitted):
+#         output += '\nNot the same number of videos in the set and in the submission'
+
+#     for video in list_of_videos_set:
+#         video_name = os.path.splitext(os.path.basename(video))[0]
+#         print('video_name', video_name)
+#         #if video_name not in classes_submitted.keys():
+#         if video_name+'.mp4' not in classes_submitted.keys():
+#             output += '\n%s not found in submission' % (video_name)
+#         elif classes_submitted[video_name+'.mp4'] not in dict_of_moves:
+#             output += '\n%s: Class %s unknown for video %s' % (video_name, classes_submitted[video_name+'.mp4'], video_name)
+
+#     if output == '':
+#         return 'OK'
+#     else:
+#         return output
 
 def check_detection_run(run_path, set_path):
     original_xml_list = [f for f in os.listdir(set_path) if f.endswith('.xml')]

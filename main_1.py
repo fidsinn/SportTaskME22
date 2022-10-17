@@ -37,7 +37,7 @@ print('Nb of threads for OpenCV : ', cv2.getNumThreads())
 Model variables
 '''
 class my_variables():
-    def __init__(self, working_path, task_name, stream_design, epochs, model_load=None, size_data=[320,180,96], cuda=True, batch_size=10, workers=10, lr=0.0001, nesterov=True, weight_decay=0.005, momentum=0.5):
+    def __init__(self, working_path, task_name, stream_design, epochs, model_load, size_data=[320,180,96], cuda=True, batch_size=10, workers=10, lr=0.0001, nesterov=True, weight_decay=0.005, momentum=0.5):
         self.size_data = np.array(size_data)
         self.cuda = cuda
         self.workers = workers
@@ -677,7 +677,7 @@ def get_classification_strokes(working_folder_task):
     test_strokes = [My_stroke(os.path.join(set_path, f), 0, len(os.listdir(os.path.join(set_path, f))), 'Unknown') for f in os.listdir(set_path)]
     return train_strokes, validation_strokes, test_strokes
 
-def classification_task(working_folder, stream_design, epochs, model_load, test_strokes_segmentation, log):
+def classification_task(working_folder, stream_design, epochs, model_load, test_strokes_segmentation, log=None):
     '''
     Main of the classification task
     Perform also on the detection task when the videos for segmentation are provided
@@ -753,7 +753,7 @@ def get_lists_annotations(task_source, task_path):
     test_strokes = get_annotations(os.path.join(task_source, 'test'), os.path.join(task_path, 'test'))
     return train_strokes, validation_strokes, test_strokes
 
-def detection_task(working_folder, source_folder, stream_design, epochs, model_load, log=None):
+def detection_task(working_folder, source_folder, stream_design, epochs, model_load, test_strokes_segmentation, log=None):
     '''
     Main of the detection task
     Return test segmentation video to try with the classification model
@@ -809,7 +809,7 @@ def parse_args():
     parser.add_argument('--model_load','-ml', default=None,
                         help='load model from \'/working_folder/Models/<task_name>/model_load')
     parser.add_argument('--test_include','-ti',default='rgb',
-                        choices=['rgb', 's', 'srgb', 'notest'],
+                        choices=['rgb', 's', 'srgb', None],
                         help='rgb(include running test on rgb data); s(... on s data); srgb(... on srgb data); notest(exclude running test)')
     parser.add_argument('--log_include','-li',default='nolog',
                         choices=['log', 'nolog'],
@@ -853,7 +853,7 @@ if __name__ == "__main__":
 
     # Prepare work tree (respect levels for correct extraction of the frames)
     # make_work_tree(working_folder, source_folder, args.stream_design, frame_width=320, log=log)
-    create_working_tree(working_folder, source_folder, args.stream_design, frame_width=320, log=log)
+    #create_working_tree(working_folder, source_folder, args.stream_design, frame_width=320, log=log)
     
     #Included data for test
     if args.test_include == 'rgb':
@@ -862,17 +862,17 @@ if __name__ == "__main__":
         test_include=get_videos_list(os.path.join(working_folder, 's', 'detectionTask', 'test'))
     elif args.test_include == 'srgb':
         test_include=get_videos_list(os.path.join(working_folder, 'srgb', 'detectionTask', 'test'))
-    elif args.test_include == 'notest':
+    elif args.test_include == None:
         test_include=None
 
     epochs = int(args.epochs)
 
     # Tasks
     if args.task=='dc':
-        detection_task(working_folder, source_folder, args.stream_design, epochs, args.model_load, log=log)
+        detection_task(working_folder, source_folder, args.stream_design, epochs, args.model_load, None, log=log)
         classification_task(working_folder, args.stream_design, epochs, args.model_load, test_strokes_segmentation=test_include, log=log)
     elif args.task=='d':
-        detection_task(working_folder, source_folder, args.stream_design, epochs, args.model_load, log=log)
+        detection_task(working_folder, source_folder, args.stream_design, epochs, args.model_load, None, log=log)
     elif args.task=='c':
         classification_task(working_folder, args.stream_design, args.epochs, args.model_load, test_strokes_segmentation=test_include, log=log)
     

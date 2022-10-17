@@ -930,7 +930,7 @@ def detection_task(working_folder, source_folder, data_in, epochs, model_load, m
     # Test process
     load_checkpoint(model, args)
     if test_include is not None:
-        test_model(model, args, test_loader, test_include) #!!
+        test_model(model, args, test_loader, test_include)
         test_prob_and_vote(model, args, test_strokes_list, test_include)
         list_of_test_videos_streams = []
         for path in task_paths:
@@ -940,7 +940,6 @@ def detection_task(working_folder, source_folder, data_in, epochs, model_load, m
             print('test_videos', test_videos)
             list_of_test_videos_streams.append(test_videos)
         print('list_of_test_videos_streams', list_of_test_videos_streams)
-        #list_of_test_videos = get_videos_list(os.path.join(task_paths, 'test'))
         test_videos_segmentation(model, args, list_of_test_videos_streams, test_include)
     return 1
 
@@ -1029,18 +1028,18 @@ if __name__ == "__main__":
 
     #TODO: cant we uncomment that part? Because everything is preprocessed already. Think it would be cleaner for final submission
     # Prepare work tree (respect levels for correct extraction of the frames)
-    create_working_tree(working_folder, source_folder, args.stream_design2, frame_width=320, log=log)
+    #create_working_tree(working_folder, source_folder, args.stream_design2, frame_width=320, log=log)
     print_and_log('Working tree created in %ds' % (time.time()-start_time), log=log)
 
     epochs = int(args.epochs)
 
     # Tasks
-    # if args.task=='dc':
-    #     detection_task(working_folder, source_folder, data_in, epochs, args.model_load_d, args.model, args.test_include, log=log)
-    #     classification_task(working_folder, data_in, epochs, args.model_load_c, args.model, args.test_include, log=log)
-    # elif args.task=='d':
-    #     detection_task(working_folder, source_folder, data_in, epochs, args.model_load_d, args.model, args.test_include, log=log)
-    # elif args.task=='c':
-    #     classification_task(working_folder, data_in, epochs, args.model_load_c, args.model, args.test_include, log=log)
+    if args.task=='dc':
+        detection_task(working_folder, source_folder, data_in, epochs, args.model_load_d, args.model, args.test_include, log=log)
+        classification_task(working_folder, data_in, epochs, args.model_load_c, args.model, args.test_include, log=log)
+    elif args.task=='d':
+        detection_task(working_folder, source_folder, data_in, epochs, args.model_load_d, args.model, args.test_include, log=log)
+    elif args.task=='c':
+        classification_task(working_folder, data_in, epochs, args.model_load_c, args.model, args.test_include, log=log)
     
     print_and_log('All Done in %ds' % (time.time()-start_time), log=log)
