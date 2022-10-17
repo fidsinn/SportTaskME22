@@ -28,11 +28,11 @@ The two softmax layers normalize the output of each individual stream before the
 
 # Results
 
-| Models       | Classification | Classification | Detection | Detection |
-|--------------|----------------|----------------|-----------|-----------|
-|              | Validation     | Test           | IoU       | mAP       |
-| baseline     | .813           | .864           | .515      | .131      |
-| Pose         | .783           |                |           |           |
-| PRGB         | .848           |                |           |           |
-| RGB and Pose | .83            | .872           | .331      | .100      |
-| RGB and PRGB | .848           | .873           | .349      | .110      |
+| Models | Classification | Classification | Classification | Detection | Detection | Detection | Detection |
+|:---:|:---:|:---:|:---:|:---:|:---:|:---:|:---:|
+|  | Train | Validation | Test | Train | Validation | IoU | mAP |
+| baseline | - | .813 | .864 | - | - | .515 (.365) | .131 (.118) |
+| Pose | 0.995 | .878 | .847 | .862 | .591 | .205 | .046 |
+| PRGB | .978 | .813 | .864 | .980 | .834 | .165 | .036 |
+| RGB and Pose | 1 | .830 | .872 | .987 | .820 | .331 | .100 |
+| RGB and PRGB | .998 | .848 | .873 | .990 | .840 | .349 | .110 |
